@@ -9,10 +9,10 @@ tags:
   - topic/encoding
   - topic/filesystem
   - privilege/user
-related: ["[[iconv]]", "[[cat]]", "[[ls]]", "[[grep]]", "[[uniq]]"]
+related: ["[[iconv]]", "[[cat]]", "[[ls]]", "[[grep]]", "[[uniq]]", "[[sha256sum]]"]
 distro: 전체
-verified: macOS (Darwin 25.5) / Rocky Linux 9.6
-updated: 2026-07-30
+verified: macOS (Darwin 25.5) / Rocky Linux 9.6 (사고 대응 세션)
+updated: 2026-08-01
 ---
 
 # file
@@ -34,6 +34,7 @@ file script/ecli                                          # 실행 바이너리 
 file script/SU-CMD script/term 2>/dev/null                # 다중 파일 동시 판정
 file COMMAND.xml                                          # 텍스트 유형 확인
 file images/*.png 2>/dev/null | sed 's/.*: //' | sort | uniq -c   # 유형별 빈도 집계
+file /root/ir/samples/zsTCX.sample                        # 악성 샘플 형식 판정 (ELF/정적링크/UPX)
 ```
 
 ### 명령어 설명
@@ -48,6 +49,8 @@ file images/*.png 2>/dev/null | sed 's/.*: //' | sort | uniq -c   # 유형별 �
 	- 인코딩 판정은 추정치 → **EUC-KR 은 `ISO-8859` 등으로 오판 가능**
 		- 확정 필요 시 `iconv -f EUC-KR -t UTF-8` 변환 성공 여부로 교차 검증
 	- NUL 바이트 포함 시 `data` 로 판정 → 실제로는 텍스트인 경우 존재 ([[tr]] 전처리 필요)
+	- **악성 샘플 판정 지표**: `statically linked`(라이브러리 의존 없이 어디서든 실행), `no section header`(분석 도구 회피), UPX 배너(패킹) → 문자열 은닉으로 C2·풀 주소 미노출, 언패킹 필요
+	- 판정만으로 계열 확정 불가 → SHA256 산출 후 VirusTotal 해시 검색 병행 → [[sha256sum]]
 
 ### 옵션
 - `-i` : MIME 타입 형식 출력 (**i**nternet media type) ※ 미검증
@@ -62,3 +65,4 @@ file images/*.png 2>/dev/null | sed 's/.*: //' | sort | uniq -c   # 유형별 �
 - [[ls]] : 파일 존재·속성 확인 — 내용 판정은 `file` 담당
 - [[grep]] : 바이너리 판정 파일은 `-a` 필요 → `file` 로 사전 확인
 - [[uniq]] : `file | sort | uniq -c` 유형별 집계 패턴
+- [[sha256sum]] : 형식 판정 후 해시 산출 (IOC·VirusTotal 검색)
