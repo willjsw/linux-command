@@ -9,10 +9,10 @@ tags:
   - topic/filesystem
   - topic/regex
   - privilege/mixed
-related: ["[[grep]]", "[[xargs]]", "[[ls]]", "[[wc]]", "[[sort]]"]
+related: ["[[grep]]", "[[xargs]]", "[[ls]]", "[[wc]]", "[[sort]]", "[[stat]]", "[[sudo]]"]
 distro: 전체
-verified: macOS (Darwin 25.5) / Rocky Linux 9.6
-updated: 2026-07-30
+verified: macOS (Darwin 25.5) / Rocky Linux 9.6 (사고 대응 세션)
+updated: 2026-08-01
 ---
 
 # find
@@ -38,6 +38,10 @@ find src/test/kotlin/.../schedule_bak -type f 2>/dev/null | wc -l   # 개수 집
 find . -path "*cc_cti_stat_pipeline*" -name "*st_agent_dd_tot*"     # 경로 + 이름 동시 조건
 find <dir> -type f | xargs -I{} basename {}                   # 파일명만 추출
 find . -name "*.jsonl" -print0 | xargs -0 cat                 # 공백 안전 전달
+# 침해 조사: 특정 시각 구간 변경 파일 탐색 (-ls로 상세)
+sudo find /home/rocky /etc /var/spool/cron -xdev \
+  -newermt "2026-07-30 20:20" ! -newermt "2026-07-30 20:40" -ls 2>/dev/null
+sudo find / -xdev -newermt "2026-07-30 20:00" ! -newermt "2026-07-30 21:00" -type f -ls 2>/dev/null | head -60
 ```
 
 ### 명령어 설명
@@ -59,6 +63,9 @@ find . -name "*.jsonl" -print0 | xargs -0 cat                 # 공백 안전 �
 - `-type d` : 디렉터리만 (**d**irectory)
 - `-path` : 전체 경로 기준 패턴 일치 (**path**)
 - `-print0` : NULL 구분자 출력 (**print** + **0**) — 공백 포함 파일명 대응
+- `-newermt <시각>` : 지정 시각 이후 수정 파일 (**newer** + **m**time + **t**ime) — 구간은 `! -newermt <종료>` 조합
+- `-xdev` : 다른 파일시스템 미교차 (**x** + **dev**ice) — 마운트 경계에서 탐색 종료
+- `-ls` : 일치 항목을 `ls -l` 형식 상세 출력 (**ls**)
 - `-maxdepth <n>` : 탐색 깊이 제한 (**max** + **depth**) ※ 미검증
 - `-mtime <n>` : 수정 시각 기준 필터 (**m**odify + **time**) ※ 미검증
 - `-exec <cmd> {} \;` : 일치 항목마다 명령 실행 (**exec**ute) ※ 미검증
@@ -71,3 +78,5 @@ find . -name "*.jsonl" -print0 | xargs -0 cat                 # 공백 안전 �
 - [[ls]] : 단일 디렉터리 조회 — 재귀 불필요 시 대체
 - [[wc]] : `find` 결과 개수 집계
 - [[sort]] : `find` 출력 정렬
+- [[stat]] : 탐색 대상 파일의 정밀 시각(`Modify`/`Birth`) 확인
+- [[sudo]] : `/root`·시스템 경로 탐색 시 권한 확보
