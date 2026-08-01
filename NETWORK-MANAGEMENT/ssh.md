@@ -9,10 +9,10 @@ tags:
   - task/connect
   - task/diagnose
   - privilege/user
-related: ["[[ss]]", "[[systemctl]]", "[[firewall-cmd]]", "[[usermod]]", "[[passwd]]", "[[sshpass]]", "[[curl]]", "[[timeout]]"]
+related: ["[[ss]]", "[[systemctl]]", "[[firewall-cmd]]", "[[usermod]]", "[[passwd]]", "[[sshpass]]", "[[curl]]", "[[timeout]]", "[[scp]]", "[[ssh-keygen]]"]
 distro: 전체 (openssh-client / openssh-server)
 verified: Rocky Linux 9.6
-updated: 2026-07-30
+updated: 2026-08-01
 ---
 
 # ssh
@@ -86,6 +86,24 @@ passwd -S master             # 'P' = 비밀번호 설정 완료
 
 ---
 
+## 원격 파일 반출 (sudo cat 스트림)
+
+`/root` 등 접속 사용자 권한 밖 경로는 `scp` 실패 → `ssh + sudo cat` 스트림 우회.
+
+```bash
+# Examples
+ssh -i <키> rocky@3.37.243.226 "sudo cat /root/ir-evidence.tar.gz" > ir-evidence.tar.gz
+ssh-keygen -lf <키>              # 접속 실패 시 키 지문 확인 → 정상 키 식별
+```
+
+### 특이사항
+- **명령 실행 위치 확인 필수** → SSH 접속된 서버 창에서 `scp`/`ssh` 실행 시 서버가 자기 자신에 접속 시도(개인키 부재로 `Permission denied (publickey)`). 반드시 로컬 셸에서 실행
+- 개인키 권한 과다 개방 시 `bad permissions`로 무시 → `chmod 400` (디렉터리를 `-i`로 지정한 오류와 구분) → [[ssh-keygen]]
+- 최초 접속 시 호스트 키 지문(`ED25519 key fingerprint`) 확인 프롬프트 → **정상 기준값으로 기록**. 한글 IME 상태에서 `yes` 입력 실패(`ㅛyes`) 빈발, 영문 전환 후 입력
+- `~/.ssh/config`에 `Host` 별칭 등록 시 `ssh <별칭>`으로 단축
+
+---
+
 ## 연관 명령어
 - [[ss]] : 22번 포트 리스닝 확인
 - [[systemctl]] : sshd 서비스 기동·자동시작 설정
@@ -96,3 +114,5 @@ passwd -S master             # 'P' = 비밀번호 설정 완료
 - [[sshpass]] : 비대화형 비밀번호 전달 — **키 인증 설정 시 불필요**
 - [[curl]] : HTTP 계층 원격 검증 — SSH 불필요 시 대체
 - [[timeout]] : 접속 무한 대기 차단
+- [[scp]] : SSH 채널 파일 복사 — `/root`는 `sudo cat` 스트림으로 우회
+- [[ssh-keygen]] : 키 지문 확인·식별, 권한 교정
