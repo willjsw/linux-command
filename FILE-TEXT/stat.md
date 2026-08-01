@@ -8,10 +8,10 @@ tags:
   - task/verify
   - topic/filesystem
   - privilege/user
-related: ["[[ls]]", "[[file]]", "[[du]]", "[[file-ops]]", "[[awk]]", "[[join]]"]
+related: ["[[ls]]", "[[file]]", "[[du]]", "[[file-ops]]", "[[awk]]", "[[join]]", "[[docker]]", "[[find]]"]
 distro: 전체
-verified: macOS (Darwin 25.5)
-updated: 2026-07-30
+verified: macOS (Darwin 25.5) / Rocky Linux 9.6 (사고 대응 세션)
+updated: 2026-08-01
 ---
 
 # stat / cut
@@ -31,6 +31,8 @@ stat -c "<포맷>" <file>        # GNU(Linux)
 
 # Examples
 stat -f "%Sp %Su %Sg %z bytes" src/main/java/.../WebMvcConfig.java 2>&1   # macOS: 권한·소유자·크기
+stat /var/lib/postgresql/data/pg_hba.conf                                 # GNU: 전체 메타데이터 (Access/Modify/Change/Birth)
+docker exec <컨테이너ID> stat /var/lib/postgresql/data/pg_hba.conf         # 컨테이너 내 파일 변조 시각 확인
 ```
 
 ### 명령어 설명
@@ -38,7 +40,13 @@ stat -f "%Sp %Su %Sg %z bytes" src/main/java/.../WebMvcConfig.java 2>&1   # macO
 	- 파일 권한·소유자·크기·시각 정밀 확인 시 사용
 	- 스크립트에서 특정 속성만 추출 시 사용 (포맷 지정)
 	- inode·링크 수 확인 시 사용
+	- **변조 시각 대조로 침해 판정 시 사용** (`Modify` vs `Birth`)
 - 특이사항
+	- **`Modify` ≠ `Birth`면 제자리 편집(덮어쓰기), 동일하면 신규 생성** 정황
+		- 예: `Birth 2026-05-05` 유지 + `Modify 2026-07-30 20:28` → 재생성 아닌 원본 덮어쓰기
+		- 권한 0600 유지 vs 신규 생성 시 umask 적용 0644 → 덮어쓰기 방식 교차 확인
+	- `Modify → Access` 간격 1초 → 편집 직후 재로딩(SIGHUP) 정황
+	- 컨테이너 내 파일은 `docker exec <ID> stat ...` → [[docker]]
 	- **포맷 옵션이 GNU 와 BSD(macOS) 간 완전 상이** ⚠
 		- GNU(Linux): `stat -c "%A %U %G %s" file` — `-c` 사용
 		- BSD(macOS): `stat -f "%Sp %Su %Sg %z" file` — `-f` 사용
@@ -98,3 +106,5 @@ cut -c1-10 file.txt                       # 문자 위치 기준 절단
 - [[file-ops]] : `chmod` 등 변경 전후 권한 확인
 - [[awk]] : 연속 공백·필드 재배치 처리 — `cut` 한계 보완
 - [[join]] : `cut` 으로 추출한 키 필드로 두 파일 결합
+- [[docker]] : 컨테이너 내 파일 메타데이터 조회
+- [[find]] : 변경 시각(`-newermt`) 기준 파일 탐색 — 시각 대조 상호보완
