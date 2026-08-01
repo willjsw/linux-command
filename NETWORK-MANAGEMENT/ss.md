@@ -9,10 +9,10 @@ tags:
   - topic/socket
   - privilege/mixed
   - replaces/netstat
-related: ["[[ssh]]", "[[systemctl]]", "[[firewall-cmd]]", "[[ping]]", "[[grep]]", "[[ip]]", "[[lsof]]", "[[curl]]", "[[ps]]"]
+related: ["[[ssh]]", "[[systemctl]]", "[[firewall-cmd]]", "[[ping]]", "[[grep]]", "[[ip]]", "[[lsof]]", "[[curl]]", "[[ps]]", "[[nc]]", "[[iptables]]"]
 distro: 전체 (iproute2 패키지)
-verified: Rocky Linux 9.6
-updated: 2026-07-30
+verified: Rocky Linux 9.6 (사고 대응 세션)
+updated: 2026-08-01
 ---
 
 # ss
@@ -33,6 +33,8 @@ ss -tlnp                     # TCP 리스닝 포트 + 프로세스
 ss -tlnp | grep :22          # SSH 포트 리스닝 확인
 ss -tulnp                    # TCP + UDP 동시
 ss -tan                      # 전체 TCP 연결 상태
+ss -tnp state established     # 수립된 연결 + 상대 IP (아웃바운드 이상 연결 조사)
+ss -tnp | grep -E '<PID>|<C2-IP>'   # 특정 프로세스·목적지 연결 확인
 ```
 
 ### 명령어 설명
@@ -40,11 +42,14 @@ ss -tan                      # 전체 TCP 연결 상태
 	- 서비스가 특정 포트에서 실제 리스닝 중인지 확인 시 사용
 	- SSH·웹·DB 등 서비스 접근 불가 원인 진단 시 사용
 	- 포트 점유 프로세스 식별 시 사용
+	- 수립된 아웃바운드 연결·조사자 세션 등 현재 연결 확인 시 사용
 - 특이사항
 	- `0.0.0.0:22` → 전체 인터페이스에서 수신 (정상)
 	- `127.0.0.1:22` → 로컬 전용 수신 → 외부 접속 불가
 	- 프로세스명(`-p`) 표시에는 root 권한 필요
 	- 리스닝 정상이나 외부 접속 실패 시 방화벽 확인 → [[firewall-cmd]]
+	- **리스너 부재(무출력) ≠ 방화벽 차단** → 서비스 정지 상태에서 `ss`만으로는 보안그룹 차단 판정 불가. 외부 관점 실검증은 [[nc]] 필요
+	- 간헐 통신·비TCP C2는 조회 시점 미노출 → 과거 통신은 VPC Flow Logs 등 별도 확인
 
 ### 옵션
 - `-t` : TCP 소켓 (**t**cp)
@@ -77,3 +82,5 @@ ping -c 3 <서버IP>                  # ④ 네트워크 도달 여부
 - [[lsof]] : 포트 점유 프로세스 조회 — macOS 대안
 - [[curl]] : HTTP 계층 응답 검증 — 리스닝 확인 후 수행
 - [[ps]] : 리스닝 프로세스 상세 확인
+- [[nc]] : 외부 관점 포트 도달 실검증 — 리스너 부재 시 방화벽 판정 보완
+- [[iptables]] : 아웃바운드 C2 차단 규칙 적용
