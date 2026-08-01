@@ -8,10 +8,10 @@ tags:
   - topic/security
   - task/privilege-escalation
   - privilege/user
-related: ["[[usermod]]", "[[id]]", "[[passwd]]", "[[ssh]]", "[[file-ops]]", "[[env]]"]
+related: ["[[usermod]]", "[[id]]", "[[passwd]]", "[[ssh]]", "[[file-ops]]", "[[env]]", "[[docker]]", "[[find]]"]
 distro: 전체 (sudo 패키지)
-verified: Rocky Linux 9.6
-updated: 2026-07-30
+verified: Rocky Linux 9.6 (사고 대응 세션)
+updated: 2026-08-01
 ---
 
 # sudo
@@ -53,6 +53,24 @@ sudo -u postgres psql        # 특정 사용자로 실행
 
 ---
 
+## 리다이렉션·글로브 함정 (sudo sh -c)
+
+```bash
+# Examples
+sudo sh -c 'docker logs <ID> > /root/ir/pg.log 2>&1'      # 리다이렉션을 root 셸이 처리
+docker logs <ID> 2>&1 | sudo tee /root/ir/pg.log > /dev/null   # 대안: tee
+sudo sh -c 'chmod 000 /root/ir/samples/*'                 # 글로브를 root 셸이 전개
+```
+
+### 특이사항
+- **`sudo`는 뒤에 오는 명령에만 적용** → `sudo cmd > /root/file`의 `>` 리다이렉션은 현재(비root) 셸이 처리하여 `Permission denied`
+	- 대응 1: `sudo sh -c '... > 파일'` (전체를 root 셸에서 실행)
+	- 대응 2: `... | sudo tee 파일` (tee가 root 권한으로 기록)
+- **`/root/*` 등 글로브도 현재 셸이 전개** → 비root는 `/root` 읽기 불가로 `cannot access` → `sudo sh -c 'chmod ...'`
+- 컨테이너 로그·파일 수집 시 빈발 → [[docker]], [[find]]
+
+---
+
 ## su (사용자 전환)
 
 ```bash
@@ -73,6 +91,8 @@ su -               # root 로 전환
 	- **`-` 옵션 시 대상 계정의 환경변수·홈디렉터리 적용** (로그인 셸)
 	- 전환 대상 계정의 비밀번호 입력 필요
 	- `exit` 로 원래 계정 복귀
+	- **AWS 클라우드 이미지는 root 비밀번호 잠금 배포** → `su -` 시 `Authentication failure`. root 셸 필요 시 `sudo -i` 사용
+	- 비밀번호 미설정 계정에서 `passwd`는 현재 비밀번호 검증 단계 실패(`Authentication token manipulation error`) → AWS 이미지 기본 상태, `sudo` 정상 동작 시 조치 불필요 → [[passwd]]
 
 ---
 
@@ -97,3 +117,5 @@ exit
 - [[ssh]] : 원격 접속 후 권한 상승
 - [[file-ops]] : 시스템 경로 파일 조작 시 권한 상승 필요
 - [[env]] : `sudo` 는 환경변수 일부 초기화 → 값 전달 주의
+- [[docker]] : 컨테이너 로그·파일을 `sudo sh -c`로 수집
+- [[find]] : `/root`·시스템 경로 탐색 시 권한 확보
