@@ -8,10 +8,10 @@ tags:
   - task/search
   - topic/filesystem
   - privilege/mixed
-related: ["[[tar]]", "[[grep]]", "[[file]]", "[[find]]", "[[cat]]"]
+related: ["[[tar]]", "[[grep]]", "[[file]]", "[[find]]", "[[cat]]", "[[zip]]"]
 distro: 전체
 verified: macOS (Darwin 25.5)
-updated: 2026-07-30
+updated: 2026-08-01
 ---
 
 # unzip
@@ -92,3 +92,4 @@ unzip -o -q spring-cloud-gateway-server-webflux-4.3.0-sources.jar 2>/dev/null   
 - [[file]] : 아카이브 형식 사전 판정
 - [[find]] : 해제 후 파일 탐색
 - [[cat]] : 해제한 소스 파일 조회
+- [[zip]] : ZIP 아카이브 생성·암호화 압축 (해제의 역방향)

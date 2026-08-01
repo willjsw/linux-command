@@ -12,7 +12,7 @@ tags:
   - privilege/root
   - distro/rhel
   - distro/rocky
-related: ["[[ss]]", "[[ssh]]", "[[systemctl]]", "[[getenforce]]", "[[ausearch]]"]
+related: ["[[ss]]", "[[ssh]]", "[[systemctl]]", "[[getenforce]]", "[[ausearch]]", "[[iptables]]", "[[nc]]"]
 distro: RHEL 계열 (firewalld 패키지)
 verified: Rocky Linux 9.6
 updated: 2026-07-29
@@ -100,3 +100,5 @@ ping -c 3 <서버IP>                         # ④ 네트워크 도달
 - [[systemctl]] : firewalld 서비스 제어
 - [[getenforce]] : SELinux 차단 여부 별도 확인
 - [[ausearch]] : SELinux 차단 로그 조회
+- [[iptables]] : 저수준 패킷 필터링 (컨테이너 `DOCKER-USER` 등 firewalld 미포괄 영역)
+- [[nc]] : 방화벽 차단 여부 외부 관점 실검증

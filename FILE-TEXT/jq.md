@@ -9,10 +9,10 @@ tags:
   - task/search
   - topic/encoding
   - privilege/user
-related: ["[[curl]]", "[[grep]]", "[[diff]]", "[[sort]]", "[[cat]]"]
+related: ["[[curl]]", "[[grep]]", "[[diff]]", "[[sort]]", "[[cat]]", "[[aws-ec2]]"]
 distro: 전체 (별도 설치 필요)
 verified: macOS (Darwin 25.5)
-updated: 2026-07-30
+updated: 2026-08-01
 ---
 
 # jq
@@ -68,3 +68,4 @@ jq '[.nodes[] | select(.id | test("audit"))] | length' graph.json # 정규식 �
 - [[diff]] : `jq -S` 정렬 후 두 JSON 비교
 - [[sort]] : `jq -r` 출력 정렬
 - [[cat]] : JSON 원문 확인 — 구조 파악 후 `jq` 필터 설계
+- [[aws-ec2]] : `aws --output json` 결과 후처리 (JMESPath `--query` 보완)

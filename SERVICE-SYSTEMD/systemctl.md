@@ -10,7 +10,7 @@ tags:
   - topic/boot-target
   - topic/desktop-environment
   - privilege/mixed
-related: ["[[journalctl]]", "[[ss]]", "[[ssh]]", "[[dnf-group]]", "[[reboot]]", "[[nmcli]]", "[[hostnamectl]]", "[[dnf]]", "[[firewall-cmd]]", "[[localectl]]"]
+related: ["[[journalctl]]", "[[ss]]", "[[ssh]]", "[[dnf-group]]", "[[reboot]]", "[[nmcli]]", "[[hostnamectl]]", "[[dnf]]", "[[firewall-cmd]]", "[[localectl]]", "[[crontab]]", "[[iptables]]"]
 distro: systemd 사용 배포판
 verified: Rocky Linux 9.6
 updated: 2026-07-29
@@ -117,3 +117,5 @@ reboot
 - [[dnf]] : 설치한 서비스 기동
 - [[firewall-cmd]] : firewalld 서비스 제어
 - [[localectl]] : systemd 계열 로케일 설정
+- [[crontab]] : systemd 타이머(`list-timers`) 지속성 조사
+- [[iptables]] : `iptables` 서비스로 규칙 영구화·활성화

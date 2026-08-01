@@ -11,10 +11,10 @@ tags:
   - topic/troubleshooting
   - privilege/user
   - requires/network
-related: ["[[ss]]", "[[lsof]]", "[[jq]]", "[[ping]]", "[[timeout]]"]
+related: ["[[ss]]", "[[lsof]]", "[[jq]]", "[[ping]]", "[[timeout]]", "[[aws-ec2]]"]
 distro: 전체
 verified: macOS (Darwin 25.5) / Rocky Linux 9.6
-updated: 2026-07-30
+updated: 2026-08-01
 ---
 
 # curl
@@ -77,6 +77,9 @@ curl -s -X PATCH "$BASE/$BOARD" -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" -d '{"name":"..."}'                        # 부분 수정
 curl -s -X PUT "$BASE/$BOARD/blocks/$BLOCK" -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" -d '{"startDate":"..."}'                   # 전체 교체
+# AWS IMDSv2: PUT으로 토큰 발급 후 GET 헤더에 전달
+curl -sX PUT http://169.254.169.254/latest/api/token \
+  -H "X-aws-ec2-metadata-token-ttl-seconds: 300"                                # 메타데이터 토큰 발급
 ```
 
 ### 명령어 설명
@@ -106,3 +109,4 @@ curl -s -X PUT "$BASE/$BOARD/blocks/$BLOCK" -H "Authorization: Bearer $TOKEN" \
 - [[jq]] : JSON 응답 정형화·필드 추출
 - [[ping]] : 네트워크 계층 도달성 확인 — HTTP 실패 시 하위 계층 진단
 - [[timeout]] : 응답 무한 대기 차단
+- [[aws-ec2]] : IMDSv2 토큰 발급·메타데이터 조회에 `curl` 사용

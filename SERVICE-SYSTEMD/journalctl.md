@@ -8,10 +8,10 @@ tags:
   - task/diagnose
   - topic/troubleshooting
   - privilege/mixed
-related: ["[[systemctl]]", "[[nmcli]]", "[[ausearch]]", "[[dmesg]]", "[[grep]]", "[[reboot]]", "[[tail]]", "[[ps]]", "[[lsof]]"]
+related: ["[[systemctl]]", "[[nmcli]]", "[[ausearch]]", "[[dmesg]]", "[[grep]]", "[[reboot]]", "[[tail]]", "[[ps]]", "[[lsof]]", "[[last]]", "[[crontab]]"]
 distro: systemd 사용 배포판
 verified: Rocky Linux 9.6
-updated: 2026-07-30
+updated: 2026-08-01
 ---
 
 # journalctl
@@ -84,3 +84,5 @@ journalctl -xe NM_DEVICE=eno1                    # 특정 장치 관련 로그
 - [[tail]] : 파일 기반 애플리케이션 로그 조회 — systemd 외부 로그
 - [[ps]] : 프로세스 기동 여부 확인
 - [[lsof]] : 포트 점유·리스닝 확인
+- [[last]] : 대화형 로그인 이력 대조 (침해 시각 전후)
+- [[crontab]] : cron 실행 로그(`/var/log/cron`)와 등록 작업 교차 확인

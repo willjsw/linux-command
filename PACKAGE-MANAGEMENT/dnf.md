@@ -12,7 +12,7 @@ tags:
   - topic/troubleshooting
   - privilege/root
   - requires/network
-related: ["[[rpm]]", "[[dnf-group]]", "[[systemctl]]", "[[localectl]]", "[[which]]"]
+related: ["[[rpm]]", "[[dnf-group]]", "[[systemctl]]", "[[localectl]]", "[[which]]", "[[iptables]]", "[[zip]]"]
 distro: RHEL 계열 (Rocky, CentOS, Fedora)
 verified: Rocky Linux 9.6
 updated: 2026-07-30
@@ -130,3 +130,5 @@ dnf reinstall -y grub2-efi-x64 shim-x64              # UEFI 부트로더 복구
 - [[reboot]] : 커널 업데이트 후 재시작
 - [[localectl]] : 로케일 경고 해소 관련
 - [[which]] : 설치 전후 명령 가용 여부 확인
+- [[iptables]] : `iptables-services` 설치로 규칙 영구화
+- [[zip]] : 증거 압축용 `zip` 패키지 설치 여부 확인
