@@ -12,7 +12,7 @@ tags:
 related: ["[[usermod]]", "[[id]]", "[[sudo]]", "[[ssh]]", "[[chroot]]", "[[rescue-mode]]", "[[getenforce]]"]
 distro: 전체 (shadow-utils 패키지)
 verified: Rocky Linux 9.6
-updated: 2026-07-29
+updated: 2026-08-01
 ---
 
 # passwd
@@ -44,6 +44,7 @@ passwd master       # 특정 계정 비밀번호 설정
 	- 동일 비밀번호 2회 입력 필요
 	- `BAD PASSWORD` 경고 출력 후에도 재입력 시 적용됨 (root 실행 시)
 	- **한국어(`kr`) 키보드 레이아웃 환경에서 특수문자 위치 상이** → 콘솔 로그인 실패 원인, 영문+숫자 조합 권장
+	- **비밀번호 미설정 계정에서 `passwd`(sudo 없이) 실행 시 `Authentication token manipulation error`** → 현재 비밀번호 검증 단계 실패. AWS 클라우드 이미지 기본 상태이며 `sudo` 정상 동작 시 인증 체계 변조 아님 → [[sudo]] `-i` 사용
 
 ### 옵션
 - `-S <user>` : 비밀번호 상태 조회 (**S**tatus)
