@@ -33,6 +33,8 @@ grep -rn "함수명" ./src                    # 재귀 + 행번호
 grep -a "패턴" file                        # 바이너리 취급 파일도 텍스트로 검색
 grep -v "제외패턴" file                    # 일치하지 않는 행
 grep -c "패턴" file                        # 일치 행 개수
+grep -vE '^\s*#|^\s*$' pg_hba.conf         # 주석·빈 행 제외 → 유효 설정만
+strings -n 8 sample | grep -aiE 'https?://|stratum|[0-9]{1,3}(\.[0-9]{1,3}){3}'  # 바이너리 IOC 추출
 ```
 
 ### 명령어 설명
@@ -45,6 +47,8 @@ grep -c "패턴" file                        # 일치 행 개수
 		- 대응: `-a` 옵션으로 텍스트 강제 취급
 		- 한글 주석이 EUC-KR로 작성된 소스 검색 시 `grep -a` 또는 `grep -arn` 필수
 	- 정규표현식 사용 시 `-E`(확장) 또는 `-P`(Perl 호환) 지정
+	- **설정 파일 유효 규칙만 추출**: `grep -vE '^\s*#|^\s*$'` → 주석·빈 행 제외 (`pg_hba.conf` 등 주석 다수 파일 조사에 유용)
+	- 바이너리(UPX 패킹 등)는 문자열 은닉 → `strings | grep -a`로도 배너만 검출 시 언패킹 필요
 
 ### 옵션
 - `-i` : 대소문자 무시 (**i**gnore case)
