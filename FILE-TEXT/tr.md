@@ -35,12 +35,15 @@ tr -d '\000' < src/mmam/cmd_list.dat | head -100       # NUL 바이트 제거 �
 tr -d '\r' < src/pbxm/pbxm.h | tr -cd '\11\12\15\40-\176' > /tmp/ascii.txt   # CR 제거 + ASCII 외 제거
 wc -l < file | tr -d ' '                               # 공백 제거 (macOS wc 대응)
 echo "$name" | tr 'A-Z' 'a-z'                          # 소문자 변환
+tr "\0" " " < /proc/678992/cmdline; echo               # /proc cmdline NUL→공백 (argv 확인)
+tr "\0" "\n" < /proc/678992/environ                    # /proc environ NUL→개행 (환경변수 나열)
 ```
 
 ### 명령어 설명
 - 사용 목적
 	- 콜론·쉼표 구분 문자열을 행 단위로 분해 시 사용 (클래스패스 분석 등)
 	- NUL·CR 등 제어문자 제거 시 사용 (바이너리 혼재 파일 조회)
+	- `/proc/<PID>/cmdline`·`environ`의 NUL 구분 필드를 공백·개행으로 변환 시 사용 (프로세스 조사)
 	- 출력 문자열의 공백 제거 시 사용 (macOS `wc` 패딩 대응)
 	- 대소문자 일괄 변환 시 사용
 - 특이사항
