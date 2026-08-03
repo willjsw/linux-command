@@ -12,7 +12,7 @@ tags:
 related: ["[[pgrep]]", "[[pkill]]", "[[kill]]", "[[lsof]]", "[[grep]]", "[[docker]]"]
 distro: 전체
 verified: macOS (Darwin 25.5) / Rocky Linux 9.6 (사고 대응 세션)
-updated: 2026-08-01
+updated: 2026-08-03
 ---
 
 # ps
@@ -37,6 +37,7 @@ ps aux | grep "[s]tat-scheduler.jar" || echo "프로세스 종료됨"  # 종료 
 lsof -nP -iTCP:5432 -sTCP:LISTEN | awk '{print $1, $2, $9}'   # 포트 기준 역추적
 ps aux --sort=-%cpu | head -15                               # CPU 상위 조회 (채굴 등 탐지)
 docker exec <컨테이너ID> ps auxww                            # 컨테이너 내부 프로세스 (전체 명령행)
+ps aux | grep -i -E '<제품명>|<접두어>' | grep -v grep       # 제거 대상 잔여 프로세스 일괄 확인
 ```
 
 ### 명령어 설명
@@ -44,6 +45,7 @@ docker exec <컨테이너ID> ps auxww                            # 컨테이너 
 	- 애플리케이션 기동 여부 확인 시 사용 (Gradle·JVM 프로세스)
 	- 종료 대상 프로세스의 PID 식별 시 사용
 	- 좀비·중복 프로세스 검출 시 사용
+	- 프로그램 제거 전후 잔여 프로세스 확인 시 사용
 - 특이사항
 	- **`ps aux | grep 패턴` 은 grep 자기 자신도 결과에 포함** → 오탐 발생
 		- 대응 1: `| grep -v grep` 추가 (가독성 높음)
@@ -57,6 +59,10 @@ docker exec <컨테이너ID> ps auxww                            # 컨테이너 
 	- CPU 상위 조회로 채굴기 등 활성 감염 탐지 → 위장 프로세스명(`upowerd`·`kworker` 등)과 시작 시각·누적 시간 대조
 	- **컨테이너 프로세스는 호스트에서 다른 PID로 노출** → 호스트 PID ↔ 컨테이너 PID 동일 프로세스, 계정은 uid 매핑 결과(`systemd+` 등). 내부 확인은 `docker exec <ID> ps auxww` → [[docker]]
 	- argv[0] 변조 시 `ps` 명령행도 위장됨 → 실행 경로는 `/proc/<PID>/exe` 확인 필요
+	- **PID 2개 이상 동시 검출 시 상호 감시(watchdog) 구조 의심** → 단일 종료로는 즉시 재기동
+		- 판별: 재조회 시 PID가 바뀌며 계속 존재 → 짝 프로세스가 복구 중
+		- 대응: 감시자·본체를 함께 정지, 또는 재기동 차단 후 종료 → [[kill]]·[[pkill]]
+		- 자기보호 프로세스는 강제 종료 승률 낮음 → 공식 제거 도구 우선
 
 ### 옵션
 - `a` : 타 사용자 프로세스 포함 (**a**ll users)
