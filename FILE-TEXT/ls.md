@@ -8,10 +8,10 @@ tags:
   - topic/filesystem
   - task/verify
   - privilege/mixed
-related: ["[[find]]", "[[stat]]", "[[du]]", "[[file]]", "[[lsblk]]"]
+related: ["[[find]]", "[[stat]]", "[[du]]", "[[file]]", "[[lsblk]]", "[[grep]]"]
 distro: 전체
 verified: macOS (Darwin 25.5) / Rocky Linux 9.6
-updated: 2026-07-30
+updated: 2026-08-03
 ---
 
 # ls
@@ -34,6 +34,8 @@ ls -la .git/hooks/pre-commit 2>/dev/null || echo "설치 안 됨"   # 존재 여
 ls -la docs/openapi.json 2>/dev/null                    # 단일 파일 속성 확인
 ls /opt/homebrew/bin 2>/dev/null | head -5              # 목록 + 출력 제한
 ls src/.../controller/ src/.../dto/req/ 2>/dev/null      # 다중 디렉터리 동시 조회
+ls -d /Applications/*Uninstall* 2>/dev/null              # 글롭 일치 디렉터리 자체만 (내용 미전개)
+ls -la /Library/LaunchDaemons/ /Library/LaunchAgents/ ~/Library/LaunchAgents/ 2>/dev/null | grep -i -E 'nos|inca'
 ```
 
 ### 명령어 설명
@@ -47,6 +49,9 @@ ls src/.../controller/ src/.../dto/req/ 2>/dev/null      # 다중 디렉터리 �
 	- 재귀 탐색은 `-R` 이나 대량 출력 발생 → [[find]] 사용 권장
 	- 파일명 정렬은 로케일 종속 → 재현성 필요 시 `LC_ALL=C`
 	- 다중 디렉터리 지정 시 디렉터리명 헤더 자동 삽입
+		- 존재 여부가 불확실한 다수 경로를 `2>/dev/null` 로 일괄 조회 후 [[grep]] 필터가 관용
+		- 단, 헤더가 필터에 제거되어 **어느 디렉터리 소속인지 불명** → 히트 시 개별 재조회 필요
+	- **`-d` 미지정 시 글롭 일치 디렉터리의 내용까지 전개** → 존재 확인 목적에는 `-d` 필수
 
 ### 옵션
 - `-l` : 상세 목록 (권한·소유자·크기·시각) (**l**ong)
@@ -55,7 +60,7 @@ ls src/.../controller/ src/.../dto/req/ 2>/dev/null      # 다중 디렉터리 �
 - `-h` : 크기를 읽기 쉬운 단위로 (**h**uman-readable) ※ 미검증
 - `-t` : 수정 시각 기준 정렬 (**t**ime) ※ 미검증
 - `-R` : 하위 디렉터리 재귀 (**R**ecursive) ※ 미검증
-- `-d` : 디렉터리 자체 정보만 (**d**irectory) ※ 미검증
+- `-d` : 디렉터리 자체 정보만 (**d**irectory) — 글롭 존재 확인 시 필수
 
 ---
 
@@ -65,3 +70,4 @@ ls src/.../controller/ src/.../dto/req/ 2>/dev/null      # 다중 디렉터리 �
 - [[du]] : 디렉터리 누적 용량 — `ls` 는 디렉터리 자체 크기만 표시
 - [[file]] : 파일 유형·인코딩 판정
 - [[lsblk]] : 블록 디바이스 목록 — 파일시스템이 아닌 장치 대상
+- [[grep]] : 다중 디렉터리 출력 필터링 — `-iE` 로 후보 열거
