@@ -9,7 +9,7 @@ tags:
   - topic/encoding
   - topic/filesystem
   - privilege/user
-related: ["[[iconv]]", "[[cat]]", "[[ls]]", "[[grep]]", "[[uniq]]", "[[sha256sum]]"]
+related: ["[[iconv]]", "[[cat]]", "[[ls]]", "[[grep]]", "[[uniq]]", "[[sha256sum]]", "[[ldd]]"]
 distro: 전체
 verified: macOS (Darwin 25.5) / Rocky Linux 9.6 (사고 대응 세션)
 updated: 2026-08-01
@@ -66,3 +66,4 @@ file /root/ir/samples/zsTCX.sample                        # 악성 샘플 형식
 - [[grep]] : 바이너리 판정 파일은 `-a` 필요 → `file` 로 사전 확인
 - [[uniq]] : `file | sort | uniq -c` 유형별 집계 패턴
 - [[sha256sum]] : 형식 판정 후 해시 산출 (IOC·VirusTotal 검색)
+- [[ldd]] : 동적 링크 의존 라이브러리 열거 — `statically linked` 판정 교차 확인

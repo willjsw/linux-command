@@ -10,7 +10,7 @@ tags:
   - task/query
   - topic/troubleshooting
   - privilege/user
-related: ["[[dnf]]", "[[dnf-group]]", "[[grep]]", "[[which]]", "[[file]]"]
+related: ["[[dnf]]", "[[dnf-group]]", "[[grep]]", "[[which]]", "[[file]]", "[[ldd]]"]
 distro: RHEL 계열 (Rocky, CentOS, Fedora)
 verified: Rocky Linux 9.6
 updated: 2026-07-30
@@ -88,3 +88,4 @@ rpm -V openssh-server            # 특정 패키지만 검증
 - [[grep]] : 패키지 목록 필터링
 - [[which]] : 명령 실제 경로 확인 → `rpm -qf` 로 제공 패키지 역추적
 - [[file]] : 패키지 파일 유형 판정
+- [[ldd]] : `not found` 라이브러리를 `rpm -qf` 로 제공 패키지 역추적

@@ -9,7 +9,7 @@ tags:
   - topic/filesystem
   - topic/regex
   - privilege/mixed
-related: ["[[grep]]", "[[xargs]]", "[[ls]]", "[[wc]]", "[[sort]]", "[[stat]]", "[[sudo]]"]
+related: ["[[grep]]", "[[xargs]]", "[[ls]]", "[[wc]]", "[[sort]]", "[[stat]]", "[[sudo]]", "[[ldd]]"]
 distro: 전체
 verified: macOS (Darwin 25.5) / Rocky Linux 9.6 (사고 대응 세션)
 updated: 2026-08-03
@@ -88,3 +88,4 @@ find <설치경로> -name "*.app" -maxdepth 4 2>/dev/null    # 깊이 제한 병
 - [[sort]] : `find` 출력 정렬
 - [[stat]] : 탐색 대상 파일의 정밀 시각(`Modify`/`Birth`) 확인
 - [[sudo]] : `/root`·시스템 경로 탐색 시 권한 확보
+- [[ldd]] : 누락 판정된 라이브러리 파일의 실제 존재 위치 탐색

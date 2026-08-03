@@ -9,7 +9,7 @@ tags:
   - topic/troubleshooting
   - topic/security
   - privilege/user
-related: ["[[which]]", "[[sshpass]]", "[[curl]]", "[[localectl]]", "[[test]]"]
+related: ["[[which]]", "[[sshpass]]", "[[curl]]", "[[localectl]]", "[[test]]", "[[ldd]]"]
 distro: 전체
 verified: macOS (Darwin 25.5) / Rocky Linux 9.6
 updated: 2026-07-30
@@ -139,3 +139,4 @@ set -x                    # 실행 명령 추적 출력 (디버깅)
 - [[curl]] : `export TOKEN` 으로 인증 토큰 재사용
 - [[localectl]] : 시스템 로케일 설정 — `env LC_ALL` 은 명령 단위 재정의
 - [[test]] : 스크립트 조건 분기 — `set -u` 와 병용
+- [[ldd]] : `LD_LIBRARY_PATH` 가 의존성 탐색 경로 결정
