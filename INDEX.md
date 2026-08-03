@@ -76,6 +76,7 @@ updated: 2026-08-01
 - [[localectl]] — 로케일·키맵·시간대 설정
 - [[which]] — 명령 설치 여부·실제 경로 확인 (`type` / `command -v` 포함)
 - [[env]] — 환경변수·셸 옵션 관리 (`export` / `source` / `set -euo pipefail`)
+- [[ldd]] — 동적 링크 의존성 열거 (`not found` = 실행 실패 원인) ※ 참조용
 
 ### PROCESS-MANAGEMENT (프로세스)
 - [[ps]] — 프로세스 스냅샷 조회 (대괄호 트릭으로 grep 자기제외)
