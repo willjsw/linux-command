@@ -8,10 +8,10 @@ tags:
   - topic/regex
   - topic/encoding
   - privilege/user
-related: ["[[journalctl]]", "[[ss]]", "[[rpm]]", "[[find]]", "[[sed]]", "[[awk]]", "[[iconv]]", "[[xargs]]", "[[ps]]"]
+related: ["[[journalctl]]", "[[ss]]", "[[rpm]]", "[[find]]", "[[sed]]", "[[awk]]", "[[iconv]]", "[[xargs]]", "[[ps]]", "[[ls]]"]
 distro: 전체
-verified: Rocky Linux 9.6
-updated: 2026-07-30
+verified: Rocky Linux 9.6 / macOS (Darwin 25.5)
+updated: 2026-08-03
 ---
 
 # grep
@@ -35,6 +35,8 @@ grep -v "제외패턴" file                    # 일치하지 않는 행
 grep -c "패턴" file                        # 일치 행 개수
 grep -vE '^\s*#|^\s*$' pg_hba.conf         # 주석·빈 행 제외 → 유효 설정만
 strings -n 8 sample | grep -aiE 'https?://|stratum|[0-9]{1,3}(\.[0-9]{1,3}){3}'  # 바이너리 IOC 추출
+ps aux | grep -i -E 'nprotect|nos|inca' | grep -v grep   # 다중 후보 OR 검색 (프로그램 잔여물 추적)
+ls -la /Library/LaunchDaemons/ | grep -i -E 'nos|inca'   # 명명 규칙 불확실 시 후보 열거
 ```
 
 ### 명령어 설명
@@ -47,6 +49,9 @@ strings -n 8 sample | grep -aiE 'https?://|stratum|[0-9]{1,3}(\.[0-9]{1,3}){3}' 
 		- 대응: `-a` 옵션으로 텍스트 강제 취급
 		- 한글 주석이 EUC-KR로 작성된 소스 검색 시 `grep -a` 또는 `grep -arn` 필수
 	- 정규표현식 사용 시 `-E`(확장) 또는 `-P`(Perl 호환) 지정
+	- **`-i -E` 조합이 잔여물 추적의 기본형** → 제품명·축약 접두어를 `|` OR 로 나열
+		- 정확한 명명 규칙 미상 시 광범위 후보 열거 → 결과 보고 범위 축소
+		- 단축 표기 `-iE` 동일 동작, `grep -v grep` 병용으로 자기제외 → [[ps]]
 	- **설정 파일 유효 규칙만 추출**: `grep -vE '^\s*#|^\s*$'` → 주석·빈 행 제외 (`pg_hba.conf` 등 주석 다수 파일 조사에 유용)
 	- 바이너리(UPX 패킹 등)는 문자열 은닉 → `strings | grep -a`로도 배너만 검출 시 언패킹 필요
 
@@ -58,7 +63,9 @@ strings -n 8 sample | grep -aiE 'https?://|stratum|[0-9]{1,3}(\.[0-9]{1,3}){3}' 
 - `-v` : 일치하지 않는 행 출력 (in**v**ert)
 - `-c` : 일치 행 개수만 (**c**ount)
 - `-l` : 일치하는 파일명만 (**l**ist)
-- `-E` : 확장 정규표현식 (**E**xtended)
+- `-E` : 확장 정규표현식 (**E**xtended) — `|` OR 결합에 필수
+- `-iE` : 대소문자 무시 + 확장 정규식 — 다중 후보 OR 검색 최빈출 조합
+- `-P` : Perl 호환 정규표현식 (**P**erl) ※ 미검증
 
 ---
 
@@ -84,3 +91,4 @@ nmcli connection show | grep eno1                  # 연결 프로파일 검색
 - [[iconv]] : **EUC-KR 파일 검색 시 변환 선행 필수** — `-a` 는 한글 깨짐
 - [[xargs]] : `find | xargs grep` 다중 파일 검색
 - [[ps]] : `ps aux | grep` 자기제외 처리 필요
+- [[ls]] : 다중 디렉터리 목록 필터링 대상 — 헤더 제거로 소속 불명 발생
