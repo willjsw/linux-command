@@ -12,7 +12,7 @@ tags:
 related: ["[[grep]]", "[[xargs]]", "[[ls]]", "[[wc]]", "[[sort]]", "[[stat]]", "[[sudo]]"]
 distro: 전체
 verified: macOS (Darwin 25.5) / Rocky Linux 9.6 (사고 대응 세션)
-updated: 2026-08-01
+updated: 2026-08-03
 ---
 
 # find
@@ -42,6 +42,9 @@ find . -name "*.jsonl" -print0 | xargs -0 cat                 # 공백 안전 �
 sudo find /home/rocky /etc /var/spool/cron -xdev \
   -newermt "2026-07-30 20:20" ! -newermt "2026-07-30 20:40" -ls 2>/dev/null
 sudo find / -xdev -newermt "2026-07-30 20:00" ! -newermt "2026-07-30 21:00" -type f -ls 2>/dev/null | head -60
+# 언인스톨러 탐색: 실행 권한·확장자 기준 후보 열거
+find <설치경로> -type f \( -perm -u+x -o -name "*.sh" \) 2>/dev/null | head -50
+find <설치경로> -name "*.app" -maxdepth 4 2>/dev/null    # 깊이 제한 병용
 ```
 
 ### 명령어 설명
@@ -52,6 +55,9 @@ sudo find / -xdev -newermt "2026-07-30 20:00" ! -newermt "2026-07-30 21:00" -typ
 - 특이사항
 	- **조건 표현식 순서가 결과 결정** → `-name` 앞에 경로 인자 필수
 	- `-o`(OR) 사용 시 우선순위 혼동 발생 → 괄호 `\( \)` 로 명시 권장
+	- **패턴 기반 탐색은 축약형 파일명 미검출** → 탐색 실패를 "부재"로 오판 위험
+		- 실증: `-iname "*uninstall*" -o -iname "*remove*"` 무결과였으나 실제 파일명은 축약형 `nosuninst`
+		- 대응: 후보 부재 판정 전 `-perm -u+x`·`-name "*.app"` 등 **속성 기준 열거**로 재확인
 	- 권한 오류 다발 시 `2>/dev/null` 로 stderr 분리
 	- **공백 포함 파일명은 파이프 전달 시 분리 사고 발생** → `-print0` + `xargs -0` 조합 필수
 	- `-name` 은 셸 글롭 패턴, 정규표현식 아님 → `*` `?` `[]` 만 유효
@@ -66,7 +72,9 @@ sudo find / -xdev -newermt "2026-07-30 20:00" ! -newermt "2026-07-30 21:00" -typ
 - `-newermt <시각>` : 지정 시각 이후 수정 파일 (**newer** + **m**time + **t**ime) — 구간은 `! -newermt <종료>` 조합
 - `-xdev` : 다른 파일시스템 미교차 (**x** + **dev**ice) — 마운트 경계에서 탐색 종료
 - `-ls` : 일치 항목을 `ls -l` 형식 상세 출력 (**ls**)
-- `-maxdepth <n>` : 탐색 깊이 제한 (**max** + **depth**) ※ 미검증
+- `-maxdepth <n>` : 탐색 깊이 제한 (**max** + **depth**)
+- `-perm -u+x` : 소유자 실행 권한 보유 파일 (**perm**ission) — `-` 접두는 "해당 비트 포함" 의미
+- `-o` : 조건 OR 결합 (**o**r) — 괄호 `\( \)` 병용 권장
 - `-mtime <n>` : 수정 시각 기준 필터 (**m**odify + **time**) ※ 미검증
 - `-exec <cmd> {} \;` : 일치 항목마다 명령 실행 (**exec**ute) ※ 미검증
 
