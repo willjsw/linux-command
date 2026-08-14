@@ -27,7 +27,7 @@
 ```
 Linux-Command/
 ├── README.md                   ← 본 문서 (저장소 소개)
-├── SKILL.md                    ← 작성·갱신 규칙 (정본)
+├── _SKILL/linux-command-vault/SKILL.md  ← 작성·갱신 규칙 (정본)
 ├── INDEX.md                    ← 색인 (MOC) + 작업 시나리오
 └── <CATEGORY>/<command>.md     ← 개별 명령어 문서
 ```
@@ -179,7 +179,7 @@ distro: <적용 배포판>       verified: <검증 환경>       updated: <YYYY-
 
 ### 품질 체크리스트
 
-문서 작성·갱신 후 전 항목 확인 (상세: [SKILL.md](SKILL.md) 9장):
+문서 작성·갱신 후 전 항목 확인 (상세: [SKILL.md](_SKILL/linux-command-vault/SKILL.md) 9장):
 
 - [ ] frontmatter 전 필드 작성
 - [ ] 태그 5개 이상, `privilege/*` 포함 / 위험 명령에 `danger/*`
@@ -192,7 +192,7 @@ distro: <적용 배포판>       verified: <검증 환경>       updated: <YYYY-
 
 ### 갱신 후 반영
 
-문서 추가·수정 시 **Git 커밋 후 `main` 푸시**. 커밋은 문서 단위로 분리하여 변경 이력이 곧 지식 축적 이력이 되도록 유지. 커밋 컨벤션은 [SKILL.md](SKILL.md) 10장 참조.
+문서 추가·수정 시 **Git 커밋 후 `main` 푸시**. 커밋은 문서 단위로 분리하여 변경 이력이 곧 지식 축적 이력이 되도록 유지. 커밋 컨벤션은 [SKILL.md](_SKILL/linux-command-vault/SKILL.md) 10장 참조.
 
 ---
 
@@ -234,5 +234,5 @@ distro: <적용 배포판>       verified: <검증 환경>       updated: <YYYY-
 
 ## 관련 문서
 
-- [SKILL.md](SKILL.md) — 작성·갱신 규칙 정본 (문서 기여 시 필독)
+- [SKILL.md](_SKILL/linux-command-vault/SKILL.md) — 작성·갱신 규칙 정본 (문서 기여 시 필독)
 - [INDEX.md](INDEX.md) — 전체 색인 및 작업 시나리오 경로

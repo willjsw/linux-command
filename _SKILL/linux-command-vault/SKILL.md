@@ -10,7 +10,7 @@ updated: 2026-07-30
 
 # SKILL — Linux Command Vault 작성 규칙
 
-- 대상 저장소: `/Users/sunwoo/Documents/Linux-Command`
+- 대상 저장소: `/Users/sunwoo/Documents/Obsidian/Linux-Command`
 - 형식: Obsidian vault (백링크·그래프뷰·태그페인 활성)
 - 목적: Claude 세션에서 **실사용·검증한** 리눅스 명령어의 체계적 축적
 - 색인: [[INDEX]]
@@ -106,9 +106,13 @@ updated: 2026-07-30
 Linux-Command/
 ├── README.md                   ← 저장소 소개 (구조화 시스템·현행화 방식)
 ├── INDEX.md                    ← 전체 색인 (MOC)
-├── SKILL.md                    ← 본 문서 (작성 규칙 정본)
+├── _SKILL/                     ← 스킬 정본 디렉터리
+│   └── linux-command-vault/
+│       └── SKILL.md            ← 본 문서 (작성 규칙 정본)
 └── <CATEGORY>/<command>.md     ← 명령어 문서
 ```
+
+- `_SKILL/`이 정본. `~/.claude/skills/linux-command-vault/SKILL.md` 는 이곳을 가리키는 심볼릭 링크
 
 - 카테고리 디렉터리: **대문자 + 하이픈** (`PACKAGE-MANAGEMENT`)
 - 파일명: **명령어 원문 소문자** (`dnf.md`, `nmcli.md`)

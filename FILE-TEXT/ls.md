@@ -28,7 +28,7 @@ updated: 2026-08-03
 ls [옵션] [경로]
 
 # Examples
-ls -la /Users/sunwoo/Documents/Linux-Command            # 숨김 파일 포함 상세 목록
+ls -la /Users/sunwoo/Documents/Obsidian/Linux-Command            # 숨김 파일 포함 상세 목록
 ls -la .env* 2>/dev/null                                # 글롭 + 존재 불확실 대응
 ls -la .git/hooks/pre-commit 2>/dev/null || echo "설치 안 됨"   # 존재 여부 판정
 ls -la docs/openapi.json 2>/dev/null                    # 단일 파일 속성 확인
