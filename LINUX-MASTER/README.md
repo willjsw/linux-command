@@ -24,12 +24,29 @@ updated: 2026-08-28
 
 ## 이론 문서 (THEORY)
 
-- 명령어 볼트가 이미 커버하는 실무 과목 외, **취약 3개 영역** 집중 정리
-- [[system-security]] — 시스템 보안 및 관리 (로그·PAM·백업·특수권한)
+- 전 시험범위 커버 — 8과목 이론 12종
+
+### 리눅스 실무·시스템의 이해
+- [[linux-basics]] — 리눅스 실무의 이해 (OS 개요·역사·라이선스·배포판·부팅과정·런레벨)
+- [[system-structure]] — 리눅스 시스템의 이해 (FHS·파일유형·inode·SHELL·X 윈도)
+
+### 네트워크
+- [[network-basics]] — 네트워크의 이해 (OSI·TCP/IP·IP주소·서브네팅·포트·프로토콜)
 - [[network-service]] — 네트워크 서비스 (웹·DNS·메일·파일공유·가상화)
 - [[network-security]] — 네트워크 보안 (침해 유형·iptables·IDS·암호화)
 
-> 실무 과목(프로세스·권한·패키지·디스크·systemd·SELinux)은 볼트 본편 [[INDEX]] 참조
+### 시스템 관리·장치
+- [[process-management]] — 프로세스 관리 (상태·시그널·잡제어·cron·우선순위)
+- [[user-permission]] — 사용자·권한 관리 (계정파일·권한·특수권한·ACL·쿼터)
+- [[package-software]] — 소프트웨어·패키지 관리 (rpm·dnf·dpkg·소스컴파일·라이브러리)
+- [[disk-device]] — 디스크·장치 관리 (파티션·파일시스템·RAID·LVM·스왑·모듈)
+- [[systemd-service]] — systemd·서비스 관리 (유닛·타겟·저널·런레벨 대응)
+- [[selinux-security]] — SELinux (MAC·모드·보안컨텍스트·불린·라벨링)
+
+### 보안
+- [[system-security]] — 시스템 보안 및 관리 (로그·PAM·백업·특수권한)
+
+> 실습 명령어 상세는 볼트 본편 [[INDEX]] 참조
 
 ---
 

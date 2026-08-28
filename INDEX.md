@@ -262,7 +262,7 @@ updated: 2026-08-01
 ## 시험 대비
 
 - [[README|LINUX-MASTER]] — 리눅스마스터 1급 필기 대비 이론·문제집 (필기 14회차·실기 6회차)
-	- 이론: [[system-security]] · [[network-service]] · [[network-security]]
+	- 이론 12종: [[linux-basics]] · [[system-structure]] · [[network-basics]] · [[network-service]] · [[network-security]] · [[process-management]] · [[user-permission]] · [[package-software]] · [[disk-device]] · [[systemd-service]] · [[selinux-security]] · [[system-security]]
 
 ---
 
