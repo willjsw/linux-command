@@ -52,6 +52,9 @@ updated: 2026-09-04
 - [[#F-3. `su`·`sudo -i` 를 반복하면 셸이 스택처럼 쌓이는가]]
 - [[#F-4. `pstree` 출력 — 최소 설치 Rocky 9 의 프로세스 전수 해설]]
 
+### G. 명령어·데몬 구조
+- [[#G-1. `~d` 데몬과 `~ctl` 명령의 관계]]
+
 ---
 
 # A. UTM 실습 환경
@@ -1989,6 +1992,219 @@ systemd-cgls                 # cgroup(서비스 단위) 기준 트리
 > 📝 **시험 포인트** : **PID 1 은 systemd**(과거 `init`). `getty`/`agetty` 는 터미널에 로그인 프롬프트를 띄우는 프로그램. `journald`(바이너리) 와 `rsyslogd`(텍스트)의 역할 구분. 고아 프로세스는 **PID 1 이 입양**. `pstree` 의 중괄호는 스레드
 
 관련 항목: [[#F-1. 환경변수·셸·tty 와 `su -` 가 환경을 초기화하는 이유]] · [[#F-3. `su`·`sudo -i` 를 반복하면 셸이 스택처럼 쌓이는가]] · 절차서 [[LAB/06-process-scheduling-diagnosis]] 1절, [[LAB/07-boot-systemd-log]] 3절
+
+---
+
+# G. 명령어·데몬 구조
+
+## G-1. `~d` 데몬과 `~ctl` 명령의 관계
+
+**Q.** `~ctl` 이 붙은 명령어와 `~d` 가 붙은 프로세스는 무엇인가. 명령어가 곧 프로세스인가. 둘은 어떤 관계인가.
+
+**A.** 먼저 전제를 하나 정정해야 한다. **명령어와 프로세스는 같은 것이 아니다.** 그리고 `~d` 와 `~ctl` 은 **서버와 클라이언트** 관계다.
+
+---
+
+### 1. 명령어 ≠ 프로세스
+
+| 구분 | 정체 | 상태 |
+| --- | --- | --- |
+| **명령어**(프로그램) | 디스크에 저장된 **실행 파일** | 정적. 실행되기 전에는 그냥 파일 |
+| **프로세스** | 그 파일이 **메모리에 올라가 실행 중인 상태** | 동적. PID·메모리·환경변수를 가짐 |
+
+```bash
+file /usr/bin/sshd 2>/dev/null || file /usr/sbin/sshd    # 파일로서의 실체
+which sshd; ls -l $(which sshd)                          # 디스크 위치
+pgrep -a sshd                                            # 실행 중인 프로세스
+```
+
+- `file` : 파일의 종류 판별 → `ELF 64-bit LSB executable` 처럼 실행 파일임을 확인
+  - **ELF** = **E**xecutable and **L**inkable **F**ormat, 리눅스 실행 파일 형식
+- `pgrep -a` : 이름으로 프로세스를 찾아 **a**rguments(명령행) 까지 표시
+
+**하나의 프로그램에서 여러 프로세스가 생길 수 있다.** `bash` 실행 파일은 하나지만 [[#F-4. `pstree` 출력 — 최소 설치 Rocky 9 의 프로세스 전수 해설]] 의 트리에는 `bash` 프로세스가 여러 개 떠 있었다. 붕어빵 틀(프로그램) 하나로 붕어빵(프로세스) 여러 개를 굽는 것과 같다.
+
+---
+
+### 2. `~d` — 데몬(daemon)
+
+- **daemon** : 배경에서 **계속 상주하며** 요청을 기다리는 서비스 프로세스
+- 어원은 그리스 신화의 **δαίμων**(다이몬) — 보이지 않는 곳에서 일하는 **수호신**. 악마(demon)가 아님
+- 관례적으로 이름 끝에 **`d`** 를 붙인다 : `sshd` = SSH **d**aemon
+
+#### 데몬의 특징
+
+| 특징 | 확인 방법 |
+| --- | --- |
+| 제어 터미널이 없음 | `ps -eo tty` 에서 **`?`** 로 표시 |
+| 부모가 `systemd(1)` | `ps -eo ppid` 가 대부분 1 |
+| 부팅 시 자동 시작 | `systemctl is-enabled <서비스>` |
+| 로그를 파일·journald 로 보냄 | 터미널이 없으니 화면에 못 찍음 |
+
+```bash
+ps -eo pid,ppid,tty,user,cmd | awk '$3=="?"' | head
+```
+
+- 터미널이 없으므로 [[#F-1. 환경변수·셸·tty 와 `su -` 가 환경을 초기화하는 이유]] 에서 다룬 **SIGHUP 으로 죽지 않는다** → 로그아웃해도 계속 동작
+- 오히려 데몬에게 `SIGHUP` 은 관례적으로 **"설정 파일을 다시 읽어라"** 라는 신호로 재정의됨
+
+#### 주의 — 모든 데몬이 `d` 로 끝나지는 않는다
+
+| 서비스 | 데몬 프로세스 이름 |
+| --- | --- |
+| Postfix | `master` (하위에 `qmgr`·`pickup`) |
+| Nginx | `nginx` |
+| Dovecot | `dovecot` |
+| Squid | `squid` |
+| Docker | `dockerd` · `containerd` |
+| Samba | `smbd` · `nmbd` · `winbindd` |
+
+---
+
+### 3. `~ctl` — 컨트롤(control) 명령
+
+- **ctl** = **c**on**t**ro**l** 의 축약
+- 데몬에게 **명령을 전달하고 결과를 받아 출력한 뒤 즉시 종료**하는 **클라이언트 도구**
+- 상주하지 않는다. `systemctl status` 를 실행하면 그 순간만 프로세스가 생겼다 사라진다
+
+```bash
+systemctl status sshd     # 실행 → 출력 → 종료
+pgrep systemctl           # 아무것도 안 나옴 (이미 끝났으므로)
+```
+
+---
+
+### 4. 둘의 관계 — 클라이언트 · 서버
+
+```
+사용자 ──▶ systemctl (클라이언트, 잠깐 실행)
+              │  요청 전달 (D-Bus / 소켓 / 시그널)
+              ▼
+           systemd (데몬, 상주)
+              │  실제 작업 수행
+              ▼
+           sshd 시작·중지·상태 보고
+```
+
+- **데몬이 실제 일을 하고, ctl 은 그 데몬에게 부탁만 한다**
+- 그래서 **데몬이 죽어 있으면 ctl 명령도 실패**한다
+
+```bash
+systemctl stop firewalld
+firewall-cmd --list-all      # → "FirewallD is not running" 오류
+```
+
+#### 통신 수단
+
+| 방식 | 사용하는 도구 |
+| --- | --- |
+| **D-Bus** (프로세스 간 메시지 버스) | `systemctl` · `hostnamectl` · `nmcli` · `firewall-cmd` |
+| **유닉스 도메인 소켓** (파일 형태의 통신구) | `docker`(`/var/run/docker.sock`) · `chronyc` |
+| **시그널** | `kill -HUP <PID>` → 설정 재읽기 |
+| **네트워크 소켓** | `rndc`(BIND, 953번 포트) |
+
+#### 왜 분리하는가
+
+- **권한 분리** : 데몬은 root 권한으로 상주하고, 사용자는 일반 권한의 ctl 로 **요청만** 보낸다. 사용자가 직접 시스템을 건드리지 않음
+- **인증** : 요청이 들어오면 데몬이 **polkit** 등으로 권한을 확인. 일반 사용자가 `systemctl restart sshd` 를 실행하면 비밀번호를 묻는 이유
+- **일관성** : 여러 사용자가 동시에 요청해도 데몬 한 곳에서 순서를 정리
+
+---
+
+### 5. `~ctl` 명령 전체 목록
+
+#### systemd 계열 (대부분 `~ctl`)
+
+| 명령 | 짝이 되는 데몬 | 역할 |
+| --- | --- | --- |
+| `systemctl` | `systemd`(PID 1) | 서비스·타겟 시작·중지·활성화·상태 조회 |
+| `journalctl` | `systemd-journald` | 통합 로그 조회 |
+| `hostnamectl` | `systemd-hostnamed` | 호스트명·머신 정보 조회·설정 |
+| `timedatectl` | `systemd-timedated` | 시간·시간대·NTP 설정 |
+| `localectl` | `systemd-localed` | 로케일·키맵 설정 |
+| `loginctl` | `systemd-logind` | 로그인 세션·사용자 관리 |
+| `coredumpctl` | `systemd-coredump` | 코어 덤프 조회 |
+| `machinectl` | `systemd-machined` | 컨테이너·VM 관리 |
+| `busctl` | `dbus-broker` | D-Bus 메시지 조회 |
+| `resolvectl` | `systemd-resolved` | DNS 조회·캐시 (**RHEL 9 는 기본 비활성**) |
+| `networkctl` | `systemd-networkd` | 네트워크 (**RHEL 9 는 NetworkManager 사용**) |
+
+#### systemd 계열이 아닌 `~ctl`
+
+| 명령 | 대상 | 특이점 |
+| --- | --- | --- |
+| `apachectl` | `httpd` | 데몬에 요청하는 것이 아니라 **직접 실행·제어하는 셸 스크립트**. `apachectl configtest` 는 설정 검사 |
+| `sysctl` | 커널 | **데몬이 아니라 커널 파라미터**(`/proc/sys/`)를 다룸. 이름만 비슷 |
+
+> ⚠️ `sysctl` 은 `~ctl` 이지만 데몬과 무관하다. **커널 설정값**을 읽고 쓰는 도구다 ([[LAB/10-security-firewall-selinux]] 7절)
+
+#### `~ctl` 이 아닌 제어 도구 — 접미사가 다양하다
+
+| 접미사 | 뜻 | 예시 | 대상 데몬 |
+| --- | --- | --- | --- |
+| `cli` | **c**ommand **l**ine **i**nterface | `nmcli` | `NetworkManager` |
+| `cmd` | **c**o**mm**an**d** | `firewall-cmd` | `firewalld` |
+| `c` | **c**lient / **c**ontrol | `chronyc` | `chronyd` |
+| `sh` | **sh**ell | `virsh` | `libvirtd` |
+| `adm` | **adm**in | `lpadmin` | `cupsd` |
+| (없음) | — | `docker` | `dockerd` |
+| `rndc` | **r**emote **n**ame **d**aemon **c**ontrol | `rndc` | `named` |
+
+---
+
+### 6. 시험 최빈출 — 4축 매칭표
+
+**서비스 ↔ 데몬 ↔ 제어 명령 ↔ 설정 파일** 의 대응이 가장 많이 출제된다.
+
+| 서비스 | 데몬 | 제어 명령 | 주 설정 파일 | 포트 |
+| --- | --- | --- | --- | --- |
+| SSH | `sshd` | `systemctl`, `sshd -t` | `/etc/ssh/sshd_config` | 22 |
+| 웹 (Apache) | `httpd` | `apachectl`, `httpd -t` | `/etc/httpd/conf/httpd.conf` | 80·443 |
+| DNS | `named` | `rndc`, `named-checkconf` | `/etc/named.conf` | 53 |
+| 방화벽 | `firewalld` | `firewall-cmd` | `/etc/firewalld/` | — |
+| 네트워크 | `NetworkManager` | `nmcli`, `nmtui` | `/etc/NetworkManager/` | — |
+| 시간 | `chronyd` | `chronyc`, `timedatectl` | `/etc/chrony.conf` | 123 |
+| 로그 | `rsyslogd` | `logger`, `rsyslogd -N1` | `/etc/rsyslog.conf` | 514 |
+| 로그(journal) | `systemd-journald` | `journalctl` | `/etc/systemd/journald.conf` | — |
+| 예약 실행 | `crond` | `crontab` | `/etc/crontab` | — |
+| 파일 공유 (SMB) | `smbd`·`nmbd` | `smbcontrol`, `testparm` | `/etc/samba/smb.conf` | 139·445 |
+| 파일 공유 (NFS) | `nfsd` | `exportfs`, `showmount` | `/etc/exports` | 2049 |
+| FTP | `vsftpd` | `systemctl` | `/etc/vsftpd/vsftpd.conf` | 21 |
+| 메일 | `master`(postfix) | `postfix`, `postconf` | `/etc/postfix/main.cf` | 25 |
+| 인쇄 | `cupsd` | `lpadmin`, `lpstat` | `/etc/cups/cupsd.conf` | 631 |
+| 감사 | `auditd` | `auditctl`, `ausearch` | `/etc/audit/auditd.conf` | — |
+| 컨테이너 | `dockerd` | `docker` | `/etc/docker/daemon.json` | — |
+| 가상화 | `libvirtd` | `virsh` | `/etc/libvirt/` | — |
+
+- 이 표가 [[LAB/09-network-services]] 전체와 [[THEORY/network-service]] 의 핵심
+
+---
+
+### 7. 실습으로 확인
+
+```bash
+# 데몬은 터미널이 없다 (tty 열이 ?)
+ps -eo pid,ppid,tty,cmd | grep -E 'sshd|crond|chronyd' | grep -v grep
+
+# ctl 은 실행 후 즉시 사라진다
+systemctl is-active sshd; pgrep systemctl || echo "systemctl 프로세스 없음"
+
+# 데몬을 멈추면 ctl 이 실패한다
+sudo systemctl stop chronyd
+chronyc tracking            # → 연결 실패
+sudo systemctl start chronyd
+chronyc tracking            # → 정상
+
+# 설정 재읽기 — 재시작 없이
+sudo systemctl reload sshd  # 내부적으로 SIGHUP 전달
+```
+
+- `is-active` : 실행 중인지만 확인. 스크립트에서 조건 판별에 사용
+- `reload` 와 `restart` 의 차이 — `reload` 는 **프로세스를 죽이지 않고** 설정만 다시 읽음 → **연결이 끊기지 않는다**. `restart` 는 완전 재시작이라 기존 세션이 끊길 수 있음
+
+> 📝 **시험 포인트** : `d` 는 **daemon**, `ctl` 은 **control**. 데몬은 상주·터미널 없음(`tty=?`)·PID 1 의 자식. ctl 은 클라이언트라 실행 후 종료. **데몬이 멈추면 ctl 도 실패**. `reload`(설정만) 와 `restart`(완전 재시작) 구분. `sysctl` 은 데몬이 아니라 **커널 파라미터** 도구. 서비스↔데몬↔설정파일↔포트 **4축 매칭**이 최빈출
+
+관련 항목: [[#F-4. `pstree` 출력 — 최소 설치 Rocky 9 의 프로세스 전수 해설]] · 절차서 [[LAB/07-boot-systemd-log]] 3절, [[LAB/09-network-services]] 전체
 
 ---
 
