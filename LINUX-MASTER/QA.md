@@ -39,6 +39,7 @@ updated: 2026-09-04
 
 ### D. 네트워크
 - [[#D-1. DHCP 란 무엇인가]]
+- [[#D-2. `dhcpd_leases` 에 응답 없는 IP 가 보이는 이유]]
 
 ---
 
@@ -773,6 +774,92 @@ dhcpd -t -cf /etc/dhcp/dhcpd.conf
 - DHCP 는 **브로드캐스트**를 쓰므로 라우터를 넘지 못함 → 다른 서브넷에 서버가 있으면 **DHCP 릴레이 에이전트**(`dhcrelay`) 필요
 
 관련 문서: [[THEORY/network-basics]] · [[THEORY/network-service]] · [[LAB/08-network-config]] · [[LAB/09-network-services]]
+
+---
+
+## D-2. `dhcpd_leases` 에 응답 없는 IP 가 보이는 이유
+
+**Q.** `/var/db/dhcpd_leases` 에 `192.168.64.2` 와 `192.168.64.3` 두 개가 나오는데, ping 이 되는 것은 `.3` 뿐이다. `.2` 는 왜 목록에 있으며, 이 파일은 무엇을 위한 것인가.
+
+**A.** 이 파일은 **현재 켜져 있는 장비 목록이 아니라, 과거에 나눠 준 주소의 장부**다. 응답이 없는 것은 그 장비가 꺼져 있기 때문이다.
+
+### 실제 확인 결과
+
+| IP | MAC | 소속 | 임대 만료 | 상태 |
+| --- | --- | --- | --- | --- |
+| `192.168.64.3` | `d6:07:47:f3:e7:35` | `srv01` (실습 VM) | 2026-09-04 14:17 | 실행 중 → 응답 |
+| `192.168.64.2` | `aa:f8:9d:9a:26:c8` | `Red Star OS 2.0` (다른 VM) | 2026-07-09 02:04 | 정지 → 무응답 |
+
+`.2` 는 **약 2개월 전에 한 번 켰던 다른 VM** 의 기록이다. 그 VM 은 지금 꺼져 있으니 ping 에 응답할 주체가 없다.
+
+MAC 주소로 대조하면 어느 VM 인지 특정할 수 있다.
+
+```bash
+# macOS — UTM 이 각 VM 에 부여한 MAC 조회
+plutil -extract Network json -o - ~/Library/Containers/com.utmapp.UTM/Data/Documents/srv01.utm/config.plist
+```
+
+- `plutil` = **p**roperty **l**ist **util**ity → macOS 의 `.plist`(설정 파일) 조회·변환 도구
+- `-extract <키경로>` : 특정 키만 뽑아냄
+- `-o -` : **o**utput 을 파일이 아닌 **표준 출력**으로 (`-` 는 표준 입출력을 뜻하는 유닉스 관례)
+
+### 임대 만료 시각 읽기
+
+`lease=0x6a9a5464` 의 16진수는 **유닉스 시각**(1970-01-01 00:00:00 UTC 부터의 초)이다.
+
+```bash
+python3 -c "import datetime; print(datetime.datetime.fromtimestamp(0x6a9a5464))"
+# 또는 macOS 의 date
+date -r $((0x6a9a5464))
+```
+
+- `date -r <초>` : macOS 판 `date` 의 옵션. 유닉스 시각을 사람이 읽는 형식으로 변환
+- 리눅스(GNU date)는 같은 일을 `date -d @<초>` 로 수행 → **배포판별 옵션 차이로 출제 가능**
+
+만료 시각이 **이미 지난** 항목은 죽은 기록이며, 서버가 그 주소를 다른 장비에 재할당할 수 있다.
+
+### 이 파일의 목적
+
+macOS 내장 DHCP 서버(`bootpd`)가 상태를 **디스크에 남겨 두는 이유**는 세 가지다.
+
+| 목적 | 설명 |
+| --- | --- |
+| 주소 연속성 | 같은 MAC 이 다시 접속하면 **이전과 같은 IP** 를 돌려줌 → VM 을 껐다 켜도 주소가 유지 |
+| 중복 방지 | 이미 빌려준 주소를 다른 장비에 주지 않도록 기록 |
+| 재시작 후 복구 | 호스트나 DHCP 데몬이 재시작해도 임대 상태를 잃지 않음 |
+
+- 메모리에만 두면 재시작 시 전부 잊어버려 IP 충돌이 발생하므로 **파일로 영속화**
+- **DHCP 서버 쪽 장부**이므로, 클라이언트가 살아 있는지 여부는 기록하지 않음 → 생존 확인은 별도 수단 필요
+
+### 살아 있는지 확인하는 방법
+
+```bash
+ping -c1 -W1000 192.168.64.3          # ICMP 응답
+nc -z -G2 192.168.64.3 22             # 22번 포트 개방 여부
+arp -n 192.168.64.3                   # ARP 캐시에 MAC 이 잡히는지
+```
+
+- `ping` : **ICMP**(**I**nternet **C**ontrol **M**essage **P**rotocol) echo 요청. 방화벽이 ICMP 를 막으면 살아 있어도 무응답이므로 **단독 판단은 위험**
+  - `-c1` : **c**ount — 1회만 보내고 종료. 스크립트에서 무한 반복을 막는 용도
+  - `-W1000` : 응답 **W**ait 제한 (macOS 는 밀리초, 리눅스는 초 단위 — 배포판 차이)
+- `nc -z` : 포트 개방만 확인 → **서비스 수준의 생존 확인**이라 ping 보다 확실
+- `arp -n` : 같은 네트워크 안이라면 MAC 이 잡히는지로 물리적 존재 확인
+  - **ARP** = **A**ddress **R**esolution **P**rotocol → IP 주소로 MAC 주소를 알아내는 프로토콜
+  - `-n` : **n**umeric — 이름 해석을 생략하고 숫자로 출력. DNS 조회 대기가 없어 빠름
+
+### 리눅스 DHCP 서버의 대응 파일
+
+| OS | 임대 기록 위치 |
+| --- | --- |
+| macOS (`bootpd`) | `/var/db/dhcpd_leases` |
+| RHEL 계열 (`dhcpd`) | `/var/lib/dhcpd/dhcpd.leases` |
+| 클라이언트 측 (NetworkManager) | `/var/lib/NetworkManager/` 하위 |
+
+리눅스 `dhcpd.leases` 는 형식이 더 상세해 시작·종료 시각, 클라이언트 호스트명, 상태(`active`·`free`)까지 기록한다.
+
+> 📝 **시험 포인트** : DHCP 서버의 임대 기록 파일 경로는 `/var/lib/dhcpd/dhcpd.leases`(RHEL). 임대 목록에 있다고 해서 **현재 접속 중이라는 뜻은 아님** — 만료 시각을 함께 봐야 함
+
+관련 항목: [[#D-1. DHCP 란 무엇인가]] · [[#A-5. 실습은 SSH 로 하는가 UTM 콘솔로 하는가]]
 
 ---
 
