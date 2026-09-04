@@ -64,6 +64,9 @@ updated: 2026-09-04
 ### J. 부팅·systemd
 - [[#J-1. `systemd-analyze critical-chain` 출력 해석]]
 
+### K. 소켓·파일 디스크립터
+- [[#K-1. 소켓이란 무엇인가 — 파일 디스크립터와 함께]]
+
 ---
 
 # A. UTM 실습 환경
@@ -2796,6 +2799,246 @@ systemctl list-dependencies multi-user.target
 > 📝 **시험 포인트** : `@` 는 **시작 시각**, `+` 는 **소요 시간**. `.target` 은 실행 단위가 아닌 **동기화 지점**이라 소요 시간이 없음. `blame`(전체 나열) 과 `critical-chain`(병목 경로) 의 차이. `multi-user.target` = 런레벨 3. 방화벽이 `network-pre.target` 앞에 오는 것은 **보안 설계**
 
 관련 항목: [[#F-4. `pstree` 출력 — 최소 설치 Rocky 9 의 프로세스 전수 해설]] · [[#G-1. `~d` 데몬과 `~ctl` 명령의 관계]] · 절차서 [[LAB/01-vm-setup-and-inspection]] 4절, [[LAB/07-boot-systemd-log]] 1·3절
+
+---
+
+# K. 소켓·파일 디스크립터
+
+## K-1. 소켓이란 무엇인가 — 파일 디스크립터와 함께
+
+**Q.** 리눅스에서 소켓이란 무엇인가. 파일 디스크립터 개념과 함께 설명해 달라.
+
+**A.** 출발점은 유닉스의 설계 철학이다. **"모든 것은 파일이다"**(everything is a file). 소켓도 그 철학 위에서 **"통신을 파일처럼 다루게 만든 것"** 이고, 파일 디스크립터는 **그 파일을 가리키는 번호표**다.
+
+---
+
+### 1. 먼저 — "모든 것은 파일이다"
+
+리눅스는 성격이 전혀 다른 대상들을 **같은 방식(열기·읽기·쓰기·닫기)으로** 다룬다.
+
+```bash
+ls -l /dev/vda /dev/null /etc/passwd /run/dbus/system_bus_socket
+ls -l /proc/$$/fd
+```
+
+`ls -l` 출력 **첫 글자**가 그 대상의 종류다.
+
+| 문자 | 종류 | 예 |
+| --- | --- | --- |
+| `-` | 일반 파일 | `/etc/passwd` |
+| `d` | 디렉터리 | `/etc` |
+| `l` | 심볼릭 링크 | `/bin` → `usr/bin` |
+| `b` | **블록** 장치 | `/dev/vda` — 블록 단위 입출력 |
+| `c` | **문자** 장치 | `/dev/null`, `/dev/tty` — 바이트 단위 |
+| `p` | 파이프(FIFO) | `mkfifo` 로 생성 |
+| **`s`** | **소켓** | `/run/dbus/system_bus_socket` |
+
+프로그램 입장에서는 이 모두가 **똑같이 `read()`·`write()` 로 다룰 수 있는 대상**이다. 덕분에 `cat`·`grep` 같은 도구가 파일이든 장치든 파이프든 가리지 않고 동작한다.
+
+---
+
+### 2. 파일 디스크립터(FD)
+
+- **file descriptor** : 프로세스가 열어 둔 대상을 가리키는 **작은 정수 번호**
+- 커널이 실제 객체(파일·소켓·파이프)를 관리하고, 프로세스는 **번호로만 접근**한다
+- 프로세스마다 **자기만의 FD 테이블**을 갖는다 → 같은 번호라도 프로세스가 다르면 다른 대상
+
+```
+프로세스 A                     커널
+┌──────────────┐         ┌─────────────────┐
+│ FD 0 ────────┼────────▶│ /dev/pts/0      │
+│ FD 1 ────────┼────────▶│ /dev/pts/0      │
+│ FD 2 ────────┼────────▶│ /dev/pts/0      │
+│ FD 3 ────────┼────────▶│ TCP 소켓        │
+└──────────────┘         └─────────────────┘
+```
+
+#### 예약된 세 개
+
+| FD | 이름 | 원어 | 기본 연결 |
+| --- | --- | --- | --- |
+| **0** | 표준 입력 | **std**ard **in**put | 키보드(터미널) |
+| **1** | 표준 출력 | **std**ard **out**put | 화면(터미널) |
+| **2** | 표준 오류 | **std**ard **err**or | 화면(터미널) |
+
+**리다이렉션의 정체가 바로 이 번호 바꿔치기다.**
+
+```bash
+command > out.txt          # FD 1 을 파일로 연결
+command 2> err.txt         # FD 2 를 파일로 연결
+command > out.txt 2>&1     # FD 1 을 파일로, 그다음 FD 2 를 FD 1 과 같은 곳으로
+command 2>&1 > out.txt     # 순서가 다르면 결과도 다름 (⚠️ 함정)
+```
+
+- `2>&1` : FD 2 가 **FD 1 이 현재 가리키는 곳**을 함께 가리키게 복제 (`&` 는 "번호" 를 뜻함)
+- 순서가 중요한 이유 — `2>&1 > out.txt` 는 FD 2 를 **아직 터미널인** FD 1 에 붙인 뒤 FD 1 만 파일로 옮기므로, 오류는 화면에 남는다 ([[LAB/04-file-text-shell]] 6절)
+
+#### 직접 확인하기
+
+```bash
+ls -l /proc/$$/fd
+exec 3< /etc/passwd        # FD 3 에 파일 열기
+ls -l /proc/$$/fd
+head -1 <&3                # FD 3 에서 읽기
+exec 3<&-                  # FD 3 닫기
+```
+
+- `/proc/<PID>/fd/` : 그 프로세스가 연 모든 FD 를 **심볼릭 링크로** 보여줌
+- `exec 3< 파일` : 셸 자신에게 FD 3 을 열어 둠. `exec` 는 명령 없이 쓰면 **현재 셸의 FD 만 조작** ([[#F-3. `su`·`sudo -i` 를 반복하면 셸이 스택처럼 쌓이는가]] 의 프로세스 대체와는 다른 용법)
+- `<&3` : FD 3 에서 입력받기, `3<&-` : FD 3 닫기
+
+#### 개수 제한
+
+```bash
+ulimit -n
+ulimit -Hn
+lsof -p $$ | wc -l
+```
+
+- `ulimit -n` : 한 프로세스가 열 수 있는 FD 최대 개수 (**n**umber of open files). 기본 1024 인 경우가 많음
+- `-H` : **H**ard limit — 일반 사용자가 넘을 수 없는 상한. `-S` 는 soft
+- 웹 서버·DB 처럼 연결이 많은 서비스는 이 값이 부족해 **`Too many open files`** 오류가 난다 → `/etc/security/limits.conf` 또는 유닛 파일의 `LimitNOFILE` 로 상향 ([[LAB/03-user-group-permission]] 5-5)
+
+---
+
+### 3. 소켓이란
+
+- **socket** : **통신의 끝점**(endpoint). 두 프로세스가 데이터를 주고받기 위해 만드는 창구
+- 원래 뜻은 전구를 끼우는 **소켓**, 즉 "꽂는 자리"
+- 만들면 **FD 로 돌려받는다** → 이후 파일처럼 `read()`·`write()` 로 사용
+
+**파이프와의 차이** : 파이프는 부모-자식처럼 **혈연 관계인 프로세스끼리, 한 방향**만 가능하다. 소켓은 **관계없는 프로세스끼리, 양방향**으로, 심지어 **다른 컴퓨터와도** 통신한다.
+
+---
+
+### 4. 소켓의 종류
+
+#### ① 주소 계열 — 어디까지 통신하는가
+
+| 계열 | 상수 | 범위 | 확인 |
+| --- | --- | --- | --- |
+| **유닉스 도메인 소켓** | `AF_UNIX` | **같은 컴퓨터 안**. 파일 경로로 식별 | `ss -x` |
+| **IPv4 소켓** | `AF_INET` | 네트워크. IP + 포트로 식별 | `ss -t4` |
+| **IPv6 소켓** | `AF_INET6` | 네트워크 | `ss -t6` |
+| **패킷 소켓** | `AF_PACKET` | 링크 계층 직접 접근 | `tcpdump` 가 사용 |
+
+- **AF** = **A**ddress **F**amily
+
+#### ② 타입 — 어떻게 전달하는가
+
+| 타입 | 대응 프로토콜 | 성격 |
+| --- | --- | --- |
+| `SOCK_STREAM` | **TCP** | 연결 지향. 순서·도달 보장 |
+| `SOCK_DGRAM` | **UDP** | 비연결. 빠르지만 보장 없음 ([[#D-1. DHCP 란 무엇인가]] 가 이것을 쓰는 이유) |
+| `SOCK_RAW` | IP 직접 | 헤더를 직접 다룸. `ping` 의 ICMP 가 사용 |
+
+---
+
+### 5. 유닉스 도메인 소켓 — 파일시스템에 보이는 소켓
+
+```bash
+ls -l /run/dbus/system_bus_socket /run/systemd/journal/socket
+ss -xl | head
+```
+
+파일처럼 경로가 있지만 **디스크에 내용이 저장되지는 않는다.** 이름표 역할만 하고, 실제 데이터는 커널 메모리를 통해 오간다.
+
+#### 네트워크 대신 이걸 쓰는 이유
+
+| 이유 | 설명 |
+| --- | --- |
+| **빠르다** | TCP/IP 스택을 거치지 않음. 체크섬·라우팅 불필요 |
+| **파일 권한으로 접근 제어** | `chmod`·`chown` 이 그대로 적용 |
+| **외부 노출 없음** | 네트워크에 뜨지 않으므로 원격 공격 불가 |
+
+**`/var/run/docker.sock` 이 대표적이다.** 이 소켓 파일의 그룹이 `docker` 라서, `docker` 그룹에 속하면 데몬에 명령할 수 있다. 그리고 도커 데몬은 root 권한으로 돌기 때문에 — **`docker` 그룹은 사실상 root 권한과 같다.** [[LAB/11-container-virtualization]] 2절에서 경고하는 근거가 이것이다.
+
+```bash
+ls -l /var/run/docker.sock
+```
+
+```text
+srw-rw----. 1 root docker 0 ... /var/run/docker.sock
+```
+
+- 첫 글자 **`s`** → 소켓
+- `root docker` → 소유자 root, 그룹 docker
+
+---
+
+### 6. 네트워크 소켓의 일생
+
+```
+서버                                  클라이언트
+socket()   소켓 생성 → FD 획득
+bind()     IP·포트에 결속
+listen()   연결 대기 상태 (LISTEN)
+                                      socket()
+accept()   ◀──────────────────────────connect()
+  └ 연결마다 새 FD 생성                (ESTABLISHED)
+read()/write()  ◀────────────────────▶ read()/write()
+close()                                close()
+```
+
+- **`accept()` 가 연결마다 새 FD 를 만든다** → 접속자가 많으면 FD 를 많이 쓰는 이유
+- [[#F-4. `pstree` 출력 — 최소 설치 Rocky 9 의 프로세스 전수 해설]] 에서 본 `sshd(774)` 가 `listen` 중인 부모, `sshd-session(2303)` 이 `accept` 후 생긴 연결별 프로세스
+
+---
+
+### 7. 확인 명령
+
+```bash
+ss -tulnp                  # 듣고 있는 TCP/UDP 소켓과 프로세스
+ss -tan state established  # 연결된 TCP
+ss -xl                     # 유닉스 도메인 소켓 (듣는 것만)
+ss -s                      # 소켓 종류별 요약 통계
+lsof -i :22                # 22번 포트를 쓰는 프로세스
+lsof -U                    # 유닉스 소켓
+lsof -p <PID>              # 그 프로세스가 연 모든 FD
+ls -l /proc/<PID>/fd
+```
+
+- `ss` = **s**ocket **s**tatistics → `netstat` 의 현대적 대체. `/proc/net/` 대신 커널 인터페이스를 직접 써서 빠름
+  - `-t` **t**cp · `-u` **u**dp · `-x` 유닉스 · `-l` **l**istening · `-n` **n**umeric(이름 해석 생략) · `-p` **p**rocess · `-a` **a**ll
+- `lsof` = **l**i**s**t **o**pen **f**iles → **"모든 것은 파일"** 철학 그대로, 열린 파일·소켓·장치를 전부 나열
+  - `-i` : **i**nternet 소켓만. `-i :22` 처럼 포트 지정 가능
+  - `-U` : **U**nix 도메인 소켓만
+  - `-p` : 특정 **p**ID
+  - `+L1` : 링크 수가 1 미만인 파일 → **삭제됐는데 프로세스가 붙잡고 있는 파일** 탐지. `df` 와 `du` 가 안 맞을 때 사용 ([[LAB/06-process-scheduling-diagnosis]] 5절)
+
+---
+
+### 8. systemd 소켓 활성화
+
+[[#J-1. `systemd-analyze critical-chain` 출력 해석]] 의 부팅 사슬에 `dbus.socket`·`systemd-journald.socket` 이 있었다. 이것이 **소켓 활성화**(socket activation)다.
+
+- **`.socket` 유닛이 먼저 소켓만 열어 두고**, 실제 요청이 들어오면 그때 서비스를 시작
+- 장점 : 부팅이 빨라지고(서비스는 필요할 때 시작), 서비스가 재시작되는 동안에도 **연결 요청이 소켓 큐에 쌓여 유실되지 않음**
+- 구형 `xinetd`(슈퍼 데몬)의 역할을 systemd 가 흡수한 것 ([[LAB/09-network-services]] 9절)
+
+```bash
+systemctl list-sockets
+```
+
+---
+
+### 9. 전체를 잇는 그림
+
+```
+"모든 것은 파일이다"
+   │
+   ├─ 일반 파일 ─┐
+   ├─ 장치      ─┤
+   ├─ 파이프    ─┼──▶ 파일 디스크립터(정수 번호)로 접근
+   └─ 소켓      ─┘        │
+                          ├─ 0/1/2 : 표준 입출력 → 리다이렉션의 원리
+                          ├─ 3~    : open()·socket() 이 반환
+                          └─ ulimit -n 으로 개수 제한
+```
+
+> 📝 **시험 포인트** : FD **0=stdin, 1=stdout, 2=stderr**. `2>&1` 의 의미와 **순서에 따른 차이**. `ls -l` 첫 글자 **`s`=소켓, `p`=파이프, `b`=블록, `c`=문자**. `ss` 는 `netstat` 대체이며 옵션 `-tulnp` 조합이 최빈출. `lsof` 는 열린 파일·소켓 조회. 유닉스 도메인 소켓은 **파일 권한으로 접근 제어**. TCP=`SOCK_STREAM`, UDP=`SOCK_DGRAM`
+
+관련 항목: [[#D-3. `ip addr` 출력 전체 해설]] · [[#F-4. `pstree` 출력 — 최소 설치 Rocky 9 의 프로세스 전수 해설]] · [[#J-1. `systemd-analyze critical-chain` 출력 해석]] · 절차서 [[LAB/04-file-text-shell]] 6·10절, [[LAB/06-process-scheduling-diagnosis]] 5절, [[LAB/08-network-config]] 5절
 
 ---
 
