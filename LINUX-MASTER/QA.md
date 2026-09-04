@@ -61,6 +61,9 @@ updated: 2026-09-04
 ### I. 로케일·국제화
 - [[#I-1. 로케일이란 무엇인가]]
 
+### J. 부팅·systemd
+- [[#J-1. `systemd-analyze critical-chain` 출력 해석]]
+
 ---
 
 # A. UTM 실습 환경
@@ -2617,6 +2620,182 @@ date
 > 📝 **시험 포인트** : 우선순위 **`LC_ALL` > `LC_*` > `LANG`**. 시스템 전역 파일은 **`/etc/locale.conf`**(구형 `/etc/sysconfig/i18n`). `locale -a` 로 설치 목록 확인, `localectl set-locale` 로 영구 설정. 로케일 이름은 **언어_지역.인코딩**. `LC_COLLATE` 가 `sort` 결과를 바꿈. 로케일(`localectl`)과 시간대(`timedatectl`)는 **다른 설정**
 
 관련 항목: [[#F-1. 환경변수·셸·tty 와 `su -` 가 환경을 초기화하는 이유]] · [[#A-6. `unknown terminal type` 오류]] · 절차서 [[LAB/01-vm-setup-and-inspection]] 3-8
+
+---
+
+# J. 부팅·systemd
+
+## J-1. `systemd-analyze critical-chain` 출력 해석
+
+**Q.** 아래 출력은 무엇을 뜻하는가.
+
+```text
+multi-user.target @1.378s
+└─rsyslog.service @1.368s +9ms
+  └─network-online.target @1.364s
+    └─NetworkManager-wait-online.service @1.329s +33ms
+      └─NetworkManager.service @1.278s +38ms
+        └─network-pre.target @1.238s
+          └─firewalld.service @780ms +455ms
+            └─basic.target @775ms
+              ...
+                └─system.slice
+                  └─-.slice
+```
+
+**A.** **부팅에서 가장 오래 걸린 의존성 사슬(임계 경로)** 을 보여준다. "무엇이 무엇을 기다리느라 부팅이 이만큼 걸렸는가" 를 추적한 것이다.
+
+---
+
+### 1. 읽는 방향
+
+```
+multi-user.target          ← 최종 목표 (맨 위)
+└─ rsyslog.service         ← 이것이 끝나야 위가 시작
+   └─ network-online.target
+      └─ ...
+         └─ -.slice        ← 가장 먼저 (맨 아래)
+```
+
+- **트리는 위에서 아래로 "무엇에 의존하는가"** 를 표시
+- **시간 순서는 아래에서 위로** — 맨 아래가 가장 먼저 완료되고, 맨 위가 마지막
+- 즉 `multi-user.target` 이 `rsyslog` 를 기다렸고, `rsyslog` 는 `network-online` 을 기다렸다는 뜻
+
+### 2. `@` 와 `+` — 가장 헷갈리는 부분
+
+| 기호 | 뜻 |
+| --- | --- |
+| **`@1.278s`** | 부팅 시작으로부터 **이 유닛이 활성화된 시각** |
+| **`+38ms`** | 이 유닛이 **초기화에 걸린 시간** |
+
+```text
+NetworkManager.service @1.278s +38ms
+```
+
+→ 부팅 후 **1.278초 시점에 시작**해서 **38밀리초 동안** 초기화했다.
+
+- `.target` 에는 `+` 가 없다 → **타겟은 실제로 무언가를 실행하는 유닛이 아니라 "여기까지 왔다" 를 표시하는 이정표**이기 때문
+- 시각이 아래에서 위로 항상 단조 증가하지는 않는다. 일부 보조 유닛(credentials 마운트 등)은 시간이 아니라 **의존 관계 기준**으로 배치되기 때문
+
+### 3. 이 출력에서 읽어야 할 결론
+
+| 항목 | 값 |
+| --- | --- |
+| `multi-user.target` 도달 | **1.378초** — 매우 빠름 |
+| 가장 오래 걸린 유닛 | **`firewalld.service` +455ms** |
+| 그 유닛이 전체에서 차지하는 비중 | 약 **33%** |
+
+**`firewalld` 하나가 부팅 시간의 3분의 1을 쓰고 있다.** 방화벽 규칙을 nftables 에 적재하는 작업이라 원래 무겁다. 그리고 `network-pre.target` 앞에 있다는 점이 중요하다 — **네트워크가 올라오기 전에 방화벽이 먼저 준비되어야 한다**는 보안 설계다. 잠깐이라도 무방비 상태가 생기지 않도록 순서를 강제한 것.
+
+---
+
+### 4. 사슬에 등장한 유닛 해설
+
+아래에서 위로, 즉 실행 순서대로 본다.
+
+#### 최하단 — cgroup 계층
+
+| 유닛 | 정체 |
+| --- | --- |
+| `-.slice` | **루트 슬라이스**. `-` 는 `/` 를 뜻하는 systemd 표기. 모든 cgroup 의 최상위 |
+| `system.slice` | 시스템 서비스 전체를 묶는 자원 그룹 |
+
+- **slice** : **cgroup**(**c**ontrol **group**)으로 프로세스를 묶어 CPU·메모리를 배분하는 단위
+- 실제로 실행되는 것이 아니라 **자원 관리용 그릇**
+
+#### 초기화 단계
+
+| 유닛 | 역할 |
+| --- | --- |
+| `systemd-journald.socket` | 로그 수집 소켓. **가장 먼저 준비**해야 이후 모든 메시지를 놓치지 않음 |
+| `kmod-static-nodes.service` `+54ms` | 아직 적재되지 않은 커널 모듈용 **정적 장치 노드**를 `/dev` 에 미리 생성 |
+| `systemd-tmpfiles-setup-dev.service` `+13ms` | `/dev` 아래 장치 파일의 권한·심볼릭 링크 설정 |
+| `local-fs-pre.target` | **로컬 파일시스템 마운트 직전** 이정표 |
+| `run-credentials-…mount` | systemd 자격 증명 전달용 임시 마운트. 이름의 `\x2d` 는 **`-` 를 16진수로 이스케이프**한 것 |
+| `local-fs.target` | `/etc/fstab` 의 로컬 파일시스템 **마운트 완료** ([[#B-2. 마운트란 무엇인가]]) |
+| `systemd-tmpfiles-setup.service` `+82ms` | `/tmp`·`/run` 등의 임시 파일·디렉터리 생성·정리 |
+| `auditd.service` `+14ms` | 감사 데몬 시작 |
+| `systemd-update-utmp.service` `+3ms` | 부팅 사실을 `/var/log/wtmp` 에 기록 → `last reboot` 로 조회되는 근거 |
+| `sysinit.target` | **시스템 초기화 완료** 이정표 |
+
+#### 기본 시스템 단계
+
+| 유닛 | 역할 |
+| --- | --- |
+| `dbus.socket` | D-Bus 통신 소켓 |
+| `dbus-broker.service` `+5ms` | 프로세스 간 통신 버스 ([[#F-4. `pstree` 출력 — 최소 설치 Rocky 9 의 프로세스 전수 해설]]) |
+| `basic.target` | **기본 시스템 준비 완료**. 이후부터 일반 서비스가 뜰 수 있음 |
+
+#### 네트워크 단계
+
+| 유닛 | 역할 |
+| --- | --- |
+| `firewalld.service` `+455ms` | 방화벽 규칙 적재. **최대 병목** |
+| `network-pre.target` | 네트워크 설정 **직전** 이정표. 방화벽처럼 먼저 준비돼야 할 것들의 기준선 |
+| `NetworkManager.service` `+38ms` | 인터페이스·IP·경로 설정 ([[#D-3. `ip addr` 출력 전체 해설]]) |
+| `NetworkManager-wait-online.service` `+33ms` | **네트워크가 실제로 연결될 때까지 대기** |
+| `network-online.target` | 네트워크 사용 가능 이정표 |
+| `rsyslog.service` `+9ms` | 로그 데몬. 원격 전송 가능성 때문에 네트워크 이후에 시작 |
+| `multi-user.target` | **부팅 완료** (CLI 다중 사용자 모드) |
+
+> `NetworkManager-wait-online.service` 는 실제 서버에서 **부팅 지연의 단골 원인**이다. DHCP 응답이 늦으면 기본 30초까지 기다린다. 네트워크를 기다릴 필요가 없는 서버라면 `systemctl disable NetworkManager-wait-online.service` 로 비활성화하기도 한다. 실습 VM 은 33ms 로 문제없음
+
+---
+
+### 5. 함께 쓰는 명령
+
+```bash
+systemd-analyze
+systemd-analyze blame
+systemd-analyze critical-chain
+systemd-analyze critical-chain sshd.service
+systemd-analyze plot > /tmp/boot.svg
+```
+
+| 명령 | 보여주는 것 |
+| --- | --- |
+| `systemd-analyze` | 커널·initrd·userspace 단계별 총 소요 시간 |
+| `blame` | **모든 유닛을 소요 시간 순으로** 정렬 |
+| `critical-chain` | **병목이 되는 의존성 사슬만** |
+| `critical-chain <유닛>` | 특정 유닛까지의 사슬 |
+| `plot` | 전체 타임라인을 **SVG 그림**으로 |
+
+#### `blame` 과 `critical-chain` 의 차이 — 중요
+
+- `blame` 은 **오래 걸린 순서**로 나열한다. 그러나 **오래 걸렸다고 부팅을 늦춘 것은 아니다** — 다른 서비스와 **병렬로** 실행됐다면 전체 시간에 영향이 없다
+- `critical-chain` 은 **실제로 다음 단계를 막고 있던 경로**만 보여준다
+- **부팅을 실제로 단축하려면 `critical-chain` 을 봐야 한다**
+
+```bash
+systemd-analyze blame | head -5
+```
+
+---
+
+### 6. 타겟(`.target`)이란
+
+- 여러 유닛을 묶은 **동기화 지점**. SysV 의 **런레벨**에 대응
+- 실행 파일이 없으므로 `+` 소요 시간이 표시되지 않음
+
+| 타겟 | 런레벨 | 뜻 |
+| --- | --- | --- |
+| `poweroff.target` | 0 | 종료 |
+| `rescue.target` | 1 | 단일 사용자 |
+| `multi-user.target` | 3 | **CLI 다중 사용자** (서버 기본) |
+| `graphical.target` | 5 | GUI |
+| `reboot.target` | 6 | 재부팅 |
+
+```bash
+systemctl get-default
+systemctl list-dependencies multi-user.target
+```
+
+- `get-default` : 부팅 시 도달할 기본 타겟 확인 → 지금은 `multi-user.target`
+- `list-dependencies` : 그 타겟이 무엇을 필요로 하는지 트리로 표시
+
+> 📝 **시험 포인트** : `@` 는 **시작 시각**, `+` 는 **소요 시간**. `.target` 은 실행 단위가 아닌 **동기화 지점**이라 소요 시간이 없음. `blame`(전체 나열) 과 `critical-chain`(병목 경로) 의 차이. `multi-user.target` = 런레벨 3. 방화벽이 `network-pre.target` 앞에 오는 것은 **보안 설계**
+
+관련 항목: [[#F-4. `pstree` 출력 — 최소 설치 Rocky 9 의 프로세스 전수 해설]] · [[#G-1. `~d` 데몬과 `~ctl` 명령의 관계]] · 절차서 [[LAB/01-vm-setup-and-inspection]] 4절, [[LAB/07-boot-systemd-log]] 1·3절
 
 ---
 
