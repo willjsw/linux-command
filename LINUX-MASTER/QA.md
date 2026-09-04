@@ -57,6 +57,7 @@ updated: 2026-09-04
 
 ### H. 로그·커널
 - [[#H-1. 커널 링 버퍼란 무엇인가]]
+- [[#H-2. `journalctl` 은 어느 파일을 읽는가]]
 
 ### I. 로케일·국제화
 - [[#I-1. 로케일이란 무엇인가]]
@@ -3448,6 +3449,221 @@ admin1   pts/0        2026-09-04 13:20 (192.168.64.1)
 > 📝 **시험 포인트** : 리눅스 특징 나열 문제에서 **다중 사용자·다중 작업·다중 처리·다중 플랫폼**을 구분해야 한다. 리눅스의 처리 방식은 **시분할**. 런레벨 1 = **단일 사용자 모드**(복구용), 런레벨 3 = **다중 사용자 모드**. 현재 접속자 확인은 `who`·`w`·`users`, 과거 이력은 `last`
 
 관련 항목: [[#J-2. 타겟(target)과 런레벨(runlevel)이란 정확히 무엇인가]] · [[#C-1. wheel 그룹이란 무엇이며 sudo 와 어떤 관계인가]] · [[#F-1. 환경변수·셸·tty 와 `su -` 가 환경을 초기화하는 이유]] · 이론 [[THEORY/linux-basics]]
+
+---
+
+## H-2. `journalctl` 은 어느 파일을 읽는가
+
+**Q.** `journalctl` 은 어디에 쓰여 있는 파일을 읽는 것인가.
+
+**A.** `systemd-journald` 가 만든 **바이너리 저널 파일**을 읽는다. 위치는 **영구 저장이냐 휘발성이냐**에 따라 둘 중 하나다.
+
+| 경로 | 성격 |
+| --- | --- |
+| **`/var/log/journal/<machine-id>/`** | **영구**. 디스크에 남아 재부팅 후에도 유지 |
+| **`/run/log/journal/<machine-id>/`** | **휘발성**. `/run` 은 tmpfs(메모리)라 **재부팅 시 소멸** |
+
+- `<machine-id>` : 시스템 고유 식별자. `/etc/machine-id` 에 저장된 32자리 16진수
+
+---
+
+### 1. 지금 어느 쪽인지 확인하기
+
+```bash
+cat /etc/machine-id
+ls -ld /var/log/journal /run/log/journal 2>&1
+journalctl --disk-usage
+journalctl --header | head -20
+```
+
+- `--disk-usage` : 저널이 차지하는 총 용량과 **실제 경로**를 함께 출력 → 가장 빠른 확인법
+- `--header` : 각 저널 파일의 메타데이터(경로·순번·시작/종료 시각) 표시
+
+```bash
+ls -lh /var/log/journal/*/ 2>/dev/null || ls -lh /run/log/journal/*/
+```
+
+```text
+system.journal          # 시스템 전체 로그 (현재 기록 중)
+system@....journal      # 회전(rotate)된 과거 파일
+user-1000.journal       # UID 1000 사용자의 로그
+```
+
+- `system.journal` : 현재 기록 중인 시스템 저널
+- `user-<UID>.journal` : 사용자별로 분리 → 일반 사용자가 자기 로그만 보게 하기 위함
+- `@` 가 들어간 이름 : **회전된 과거 파일**. 크기 한도에 도달하면 봉인하고 새 파일 시작
+
+---
+
+### 2. 영구/휘발성을 결정하는 설정
+
+```bash
+grep -E '^#?Storage' /etc/systemd/journald.conf
+```
+
+| `Storage` 값 | 동작 |
+| --- | --- |
+| `auto` (기본값) | **`/var/log/journal/` 디렉터리가 있으면 영구, 없으면 휘발성** |
+| `persistent` | 디렉터리가 없으면 **만들어서** 영구 저장 |
+| `volatile` | 항상 `/run` 에만 (메모리) |
+| `none` | 저장하지 않음 (전달만) |
+
+**즉 기본값 `auto` 에서는 디렉터리 존재 여부가 곧 정책이다.** 재부팅 후에도 로그를 보려면 아래처럼 전환한다.
+
+```bash
+sudo mkdir -p /var/log/journal
+sudo systemd-tmpfiles --create --prefix /var/log/journal
+sudo systemctl restart systemd-journald
+journalctl --list-boots
+```
+
+- `systemd-tmpfiles --create` : `tmpfiles.d` 규칙대로 디렉터리 **소유자·권한을 올바르게** 설정 (`systemd-journal` 그룹, 2755)
+  - `--prefix` : 해당 경로에 관한 규칙만 적용
+- `journalctl --list-boots` : 저장된 부팅 세션 목록. **두 줄 이상 나오면 영구 저장이 되고 있다는 증거**
+
+> 이 절차는 [[LAB/07-boot-systemd-log]] 5절에 있다. 영구 저장을 켜야 [[#H-1. 커널 링 버퍼란 무엇인가]] 에서 말한 `journalctl -k -b -1`(이전 부팅의 커널 로그)이 가능해진다
+
+---
+
+### 3. 왜 텍스트가 아니라 바이너리인가
+
+`/var/log/messages` 는 `cat` 으로 읽히는데 저널은 안 된다. 이유가 있다.
+
+| 이점 | 설명 |
+| --- | --- |
+| **구조화된 필드** | 한 줄이 텍스트가 아니라 **키=값 묶음**. 인덱스가 있어 필터가 빠름 |
+| **메타데이터 자동 첨부** | 프로그램이 안 적어도 PID·UID·유닛명·부팅 ID 가 기록됨 |
+| **위조 탐지** | 파일 봉인(FSS)으로 변조 여부 검증 가능 |
+| **압축** | 같은 내용을 더 작게 저장 |
+
+실제 필드를 보면 이해가 된다.
+
+```bash
+journalctl -u sshd -n 1 -o verbose
+```
+
+```text
+_PID=774
+_UID=0
+_GID=0
+_COMM=sshd
+_EXE=/usr/sbin/sshd
+_CMDLINE=/usr/sbin/sshd -D ...
+_SYSTEMD_UNIT=sshd.service
+_BOOT_ID=...
+_MACHINE_ID=...
+_HOSTNAME=srv01
+PRIORITY=6
+MESSAGE=Server listening on 0.0.0.0 port 22.
+```
+
+- `-o verbose` : **o**utput 형식을 상세로 → **모든 필드**를 보여줌
+- **밑줄(`_`)로 시작하는 필드는 journald 가 신뢰할 수 있게 직접 붙인 것** — 프로그램이 위조할 수 없다
+- 이 필드로 정밀 필터가 가능하다
+
+```bash
+journalctl _PID=774
+journalctl _SYSTEMD_UNIT=sshd.service
+journalctl _COMM=sudo
+journalctl PRIORITY=3
+```
+
+- 텍스트 로그에서 `grep` 으로 흉내 내려면 부정확하고 느리다 → **바이너리 형식의 존재 이유**
+
+---
+
+### 4. journald 는 어디서 로그를 모으는가
+
+`journalctl` 이 읽는 파일의 **원천**은 네 곳이다.
+
+```
+① 커널 링 버퍼 (/dev/kmsg)         ─┐
+② syslog 소켓 (/run/systemd/journal/dev-log) ─┤
+③ 네이티브 소켓 (/run/systemd/journal/socket) ─┼─▶ systemd-journald ─▶ 저널 파일
+④ 서비스의 표준출력·표준오류      ─┘
+```
+
+| 원천 | 내용 |
+| --- | --- |
+| ① 커널 | `dmesg` 로 보는 그 내용 → `journalctl -k` ([[#H-1. 커널 링 버퍼란 무엇인가]]) |
+| ② syslog | `logger` 명령이나 전통적 프로그램이 보낸 것 |
+| ③ 네이티브 | systemd 를 아는 프로그램이 **구조화된 필드째로** 보냄 |
+| ④ stdout/stderr | 서비스가 화면에 찍은 것을 journald 가 가로채 기록 |
+
+- ④ 덕분에 **데몬이 로그 파일을 직접 다루지 않아도 된다** — 그냥 `echo` 만 해도 저널에 남는다
+- 이 소켓들이 [[#K-1. 소켓이란 무엇인가 — 파일 디스크립터와 함께]] 의 유닉스 도메인 소켓이며, [[#J-1. `systemd-analyze critical-chain` 출력 해석]] 에서 `systemd-journald.socket` 이 가장 먼저 준비된 이유다
+
+```bash
+ls -l /run/systemd/journal/
+logger -t test "저널 테스트"
+journalctl -t test -n 1
+```
+
+- `logger -t <태그>` : syslog 소켓으로 메시지 전송. 스크립트에서 로그를 남길 때 사용
+- `journalctl -t <태그>` : 그 태그로 조회
+
+---
+
+### 5. rsyslog 와의 관계
+
+```
+systemd-journald ──▶ /var/log/journal/  (바이너리, journalctl)
+        │
+        └─ 전달 ──▶ rsyslogd ──▶ /var/log/messages  (텍스트, cat/grep)
+                                 /var/log/secure
+```
+
+- journald 가 받은 것을 rsyslog 로 **넘겨주는** 구조 (`ForwardToSyslog`)
+- 그래서 **같은 메시지가 양쪽에 존재**한다
+- 텍스트 로그의 장점 : `grep`·`awk` 로 다루기 쉽고, **원격 서버로 전송**하기 쉬움 ([[LAB/07-boot-systemd-log]] 6절)
+
+---
+
+### 6. 용량 관리
+
+저널은 무한정 커지지 않는다. 한도에 도달하면 오래된 파일부터 지운다.
+
+```bash
+journalctl --disk-usage
+grep -E '^#?System(MaxUse|KeepFree|MaxFileSize)|^#?MaxRetentionSec' /etc/systemd/journald.conf
+sudo journalctl --vacuum-size=200M
+sudo journalctl --vacuum-time=2weeks
+sudo journalctl --rotate
+sudo journalctl --verify
+```
+
+| 설정 | 뜻 |
+| --- | --- |
+| `SystemMaxUse` | 저널 전체가 쓸 수 있는 **최대 용량** (기본: 파일시스템의 10%) |
+| `SystemKeepFree` | 디스크에 **남겨 둘 여유 공간** (기본 15%) |
+| `SystemMaxFileSize` | 개별 파일 최대 크기 → 넘으면 회전 |
+| `MaxRetentionSec` | **보관 기간** 상한 |
+
+- `--vacuum-size=` : 지정 용량이 되도록 오래된 파일 삭제
+- `--vacuum-time=` : 지정 기간보다 오래된 것 삭제
+- `--rotate` : 현재 파일을 봉인하고 새 파일 시작
+- `--verify` : 파일 무결성 검사
+
+---
+
+### 7. 권한
+
+```bash
+ls -ld /var/log/journal/*/
+id
+```
+
+- 저널 디렉터리는 `systemd-journal` 그룹 소유
+- **일반 사용자는 자기 로그(`user-<UID>.journal`)만** 볼 수 있다
+- 시스템 전체 로그를 보려면 `root` 이거나 `systemd-journal`·`wheel` 그룹에 속해야 함 ([[#C-1. wheel 그룹이란 무엇이며 sudo 와 어떤 관계인가]])
+
+```bash
+sudo usermod -aG systemd-journal dev1
+```
+
+> 📝 **시험 포인트** : 저널 파일 위치는 **`/var/log/journal/`**(영구) 또는 **`/run/log/journal/`**(휘발성). 설정 파일은 **`/etc/systemd/journald.conf`**, 핵심 항목은 **`Storage=`**. 영구 저장 전환은 `/var/log/journal` 디렉터리 생성 후 journald 재시작. 저널은 **바이너리**라 `cat` 불가, `journalctl` 로만 조회. rsyslog 의 텍스트 로그(`/var/log/messages`)와 **병존**
+
+관련 항목: [[#H-1. 커널 링 버퍼란 무엇인가]] · [[#G-1. `~d` 데몬과 `~ctl` 명령의 관계]] · [[#K-1. 소켓이란 무엇인가 — 파일 디스크립터와 함께]] · 절차서 [[LAB/07-boot-systemd-log]] 5~6절
 
 ---
 
