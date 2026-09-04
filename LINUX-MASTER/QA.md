@@ -37,6 +37,9 @@ updated: 2026-09-04
 ### C. 계정·권한
 - [[#C-1. wheel 그룹이란 무엇이며 sudo 와 어떤 관계인가]]
 
+### D. 네트워크
+- [[#D-1. DHCP 란 무엇인가]]
+
 ---
 
 # A. UTM 실습 환경
@@ -608,6 +611,168 @@ visudo -c                     # 문법만 검사
   - `-c` : **c**heck — 편집 없이 문법만 검사
 
 > 📝 **시험 포인트** : "일반 사용자에게 관리자 권한을 주는 방법" → `usermod -aG wheel <user>`. `-a` 누락 시 부작용, `%wheel ALL=(ALL) ALL` 의 4개 필드 해석, `su` 와 `sudo` 의 비밀번호 차이가 빈출
+
+---
+
+# D. 네트워크
+
+## D-1. DHCP 란 무엇인가
+
+**Q.** DHCP 란 무엇인가.
+
+**A.** **D**ynamic **H**ost **C**onfiguration **P**rotocol — 네트워크에 접속한 장비에게 **IP 주소를 비롯한 네트워크 설정을 자동으로 나눠 주는 프로토콜**이다.
+
+### 왜 필요한가
+
+IP 통신을 하려면 최소 네 가지를 알아야 한다.
+
+| 항목 | 없으면 생기는 일 |
+| --- | --- |
+| IP 주소 | 자기 주소가 없어 통신 자체 불가 |
+| 서브넷 마스크 | 어디까지가 같은 네트워크인지 판단 불가 |
+| 기본 게이트웨이 | 외부 네트워크로 나가지 못함 |
+| DNS 서버 | 도메인 이름을 주소로 바꾸지 못함 |
+
+이걸 장비마다 손으로 넣으면 대수가 늘수록 관리가 불가능해지고, 같은 주소를 두 대에 주는 **IP 충돌**이 발생한다. DHCP 는 이 배포와 회수를 서버가 중앙에서 관리한다.
+
+- 전신은 **BOOTP**(**BOOT**strap **P**rotocol) — 고정 할당만 가능했던 것을 동적 할당까지 확장한 것이 DHCP
+
+### 포트 (시험 빈출)
+
+| 역할 | 포트 | 프로토콜 |
+| --- | --- | --- |
+| 서버 | **67** | UDP |
+| 클라이언트 | **68** | UDP |
+
+- **UDP** = **U**ser **D**atagram **P**rotocol → 연결 수립 없이 보내는 방식
+- 아직 IP 가 없는 상태에서 통신을 시작해야 하므로, 연결 수립이 필요한 TCP 를 쓸 수 없음
+- 첫 요청은 목적지를 모르므로 **브로드캐스트**(`255.255.255.255`)로 발신
+
+### 할당 절차 — DORA (순서 암기)
+
+| 순서 | 메시지 | 방향 | 내용 |
+| --- | --- | --- | --- |
+| **D** | DHCP**DISCOVER** | 클라이언트 → 브로드캐스트 | "DHCP 서버 있습니까" |
+| **O** | DHCP**OFFER** | 서버 → 클라이언트 | "이 주소 쓰시겠습니까" |
+| **R** | DHCP**REQUEST** | 클라이언트 → 브로드캐스트 | "그 주소 쓰겠습니다" |
+| **A** | DHCP**ACK** | 서버 → 클라이언트 | "확정. 임대 기간은 N초" |
+
+- REQUEST 를 다시 브로드캐스트하는 이유 — 서버가 여러 대일 때 **선택받지 못한 서버가 제안을 회수**하도록 알리기 위함
+- **ACK** = **ACK**nowledgement(확인 응답). 거절은 **NAK**(**N**egative **ACK**)
+- 반납은 DHCP**RELEASE**, 이미 쓰이는 주소면 DHCP**DECLINE**
+
+### 임대(lease) 개념
+
+DHCP 는 주소를 **영구히 주지 않고 기한을 정해 빌려준다**. 기기가 사라져도 주소가 회수되도록 하기 위함이다.
+
+| 시점 | 동작 |
+| --- | --- |
+| 임대 시간의 50% (T1) | 클라이언트가 갱신(renew) 요청 |
+| 임대 시간의 87.5% (T2) | 갱신 실패 시 다른 서버에도 요청 |
+| 만료 | 주소 반납 후 DORA 재시작 |
+
+- 갱신이 성공하면 **같은 주소를 계속 유지**하므로, DHCP 라도 주소가 자주 바뀌지는 않음
+- DHCP 서버를 못 찾으면 **APIPA**(**A**utomatic **P**rivate **IP** **A**ddressing)로 `169.254.0.0/16` 대역의 주소를 스스로 붙임 → 이 주소가 보이면 **DHCP 실패 신호**
+
+### 실습 환경에서의 DHCP
+
+UTM 의 Shared Network 는 macOS 의 `vmnet` 공유 네트워크를 쓰며, **macOS 가 DHCP 서버 역할**을 한다.
+
+```bash
+cat /var/db/dhcpd_leases
+```
+
+```text
+{
+	ip_address=192.168.64.3
+	hw_address=1,d6:7:47:f3:e7:35
+	lease=0x6a9a5277
+}
+```
+
+- `/var/db/dhcpd_leases` : macOS 내장 DHCP 서버의 임대 기록
+- `hw_address` : **h**ard**w**are address = **MAC**(**M**edia **A**ccess **C**ontrol) 주소. 앞의 `1,` 은 하드웨어 유형(1 = 이더넷)
+- `lease` : 만료 시각을 16진수 유닉스 시각으로 기록
+- 게이트웨이 겸 DNS 는 `192.168.64.1`(호스트)
+
+게스트 쪽에서 확인하는 명령이다.
+
+```bash
+nmcli connection show enp0s1 | grep -i dhcp
+ip -4 addr show enp0s1
+cat /etc/resolv.conf
+```
+
+- `nmcli` = **N**etwork**M**anager **c**ommand **l**ine **i**nterface
+- RHEL 9 는 NetworkManager 가 **내장 DHCP 클라이언트**를 사용 (구형은 별도 `dhclient` 데몬)
+- 받아온 값이 `/etc/resolv.conf` 에 자동 반영됨 → 파일 상단에 "수동 편집 금지" 주석이 붙는 이유
+
+### 고정 IP 로 바꾸는 이유
+
+서버는 주소가 바뀌면 곤란하다. 클라이언트가 찾아올 주소가 흔들리고, DNS·방화벽 규칙이 어긋난다. 그래서 [[LAB/08-network-config]] 에서 `192.168.64.10` 으로 고정한다.
+
+```bash
+nmcli con mod enp0s1 ipv4.method manual ipv4.addresses 192.168.64.10/24 \
+  ipv4.gateway 192.168.64.1 ipv4.dns "192.168.64.1 8.8.8.8"
+```
+
+- `ipv4.method manual` : DHCP(`auto`) 대신 **수동 지정**으로 전환. 이 값을 바꾸지 않으면 나머지 설정이 무시됨
+- `/24` : 서브넷 마스크를 **CIDR**(**C**lassless **I**nter-**D**omain **R**outing) 표기로. `255.255.255.0` 과 동일
+- 고정 IP 를 쓸 때는 **DHCP 풀 범위 밖**의 주소를 골라야 충돌이 없음
+
+### DHCP 서버 구축 (시험 범위)
+
+RHEL 계열의 설정 파일과 주요 지시자다.
+
+| 항목 | 값 |
+| --- | --- |
+| 패키지 | `dhcp-server` |
+| 데몬 | `dhcpd` |
+| 설정 파일 | `/etc/dhcp/dhcpd.conf` |
+| 임대 기록 | `/var/lib/dhcpd/dhcpd.leases` |
+
+```text
+subnet 192.168.64.0 netmask 255.255.255.0 {
+    range 192.168.64.100 192.168.64.200;
+    option routers 192.168.64.1;
+    option domain-name-servers 192.168.64.1;
+    default-lease-time 3600;
+    max-lease-time 7200;
+}
+
+host printer01 {
+    hardware ethernet 00:11:22:33:44:55;
+    fixed-address 192.168.64.50;
+}
+```
+
+- `subnet … netmask …` : 이 서버가 관리할 네트워크 대역 선언
+- `range` : 동적으로 나눠 줄 주소 범위. **이 범위 밖 주소는 고정 IP 용으로 남겨 둠**
+- `option routers` : 클라이언트에 알려 줄 기본 게이트웨이
+- `option domain-name-servers` : 알려 줄 DNS 서버
+- `default-lease-time` : 클라이언트가 기간을 요청하지 않을 때 적용할 임대 시간(초)
+- `max-lease-time` : 클라이언트가 요청하더라도 넘길 수 없는 상한(초)
+- `host` 블록 : MAC 주소를 보고 **항상 같은 주소를 주는 고정 할당**(DHCP 예약). 프린터·서버처럼 주소가 고정돼야 하는 장비에 사용
+
+```bash
+dhcpd -t -cf /etc/dhcp/dhcpd.conf
+```
+
+- `-t` : **t**est — 서비스를 띄우지 않고 **설정 문법만 검사**. 잘못된 설정으로 서비스가 죽는 것을 막기 위해 항상 선행
+- `-cf` : **c**onfig **f**ile 경로 지정
+
+> ⚠️ 실습 VM 에서 `dhcpd` 를 **실제로 기동하면 UTM 의 NAT DHCP 와 충돌**해 네트워크가 끊긴다 → [[LAB/09-network-services]] 에서는 문법 검사까지만 수행
+
+### 시험 포인트
+
+- 포트 **67(서버) / 68(클라이언트) UDP** — 숫자와 방향을 바꿔 낸 선지가 오답
+- **DORA 순서** — Discover → Offer → Request → Ack
+- `range` 와 `fixed-address` 의 역할 구분
+- `default-lease-time` 과 `max-lease-time` 의 차이
+- `169.254.x.x` 주소가 보이면 DHCP 서버 응답 실패
+- DHCP 는 **브로드캐스트**를 쓰므로 라우터를 넘지 못함 → 다른 서브넷에 서버가 있으면 **DHCP 릴레이 에이전트**(`dhcrelay`) 필요
+
+관련 문서: [[THEORY/network-basics]] · [[THEORY/network-service]] · [[LAB/08-network-config]] · [[LAB/09-network-services]]
 
 ---
 
