@@ -58,6 +58,9 @@ updated: 2026-09-04
 ### H. 로그·커널
 - [[#H-1. 커널 링 버퍼란 무엇인가]]
 
+### I. 로케일·국제화
+- [[#I-1. 로케일이란 무엇인가]]
+
 ---
 
 # A. UTM 실습 환경
@@ -2369,6 +2372,251 @@ dmesg | tail -1
 > 📝 **시험 포인트** : `dmesg` 는 **커널 링 버퍼**를 출력. 부팅 메시지 확인 명령으로 출제. 링 버퍼는 **고정 크기·순환**이라 오래된 것이 덮어써지고 **재부팅 시 소멸**. 영구 기록은 `/var/log/dmesg`·`/var/log/messages`·journald. `journalctl -k` 는 `dmesg` 와 동등하되 **이전 부팅 조회 가능**. 로그 수준 8단계는 숫자가 **작을수록 심각**
 
 관련 항목: [[#F-4. `pstree` 출력 — 최소 설치 Rocky 9 의 프로세스 전수 해설]] · [[#G-1. `~d` 데몬과 `~ctl` 명령의 관계]] · 절차서 [[LAB/01-vm-setup-and-inspection]] 3-7, [[LAB/07-boot-systemd-log]] 5~6절
+
+---
+
+# I. 로케일·국제화
+
+## I-1. 로케일이란 무엇인가
+
+**Q.** 로케일이란 무엇인가.
+
+**A.** **언어와 지역에 따라 달라지는 표기 관습을 모아 둔 설정 묶음**이다. 같은 프로그램이라도 로케일에 따라 날짜·숫자·정렬·메시지가 다르게 나온다.
+
+- **locale** : 영어로 "장소·현장" 을 뜻하는 단어
+- 프로그램을 여러 언어권에서 쓸 수 있게 만드는 **국제화**(**i18n** = **i**nternationalizatio**n**, 사이 글자 18개)의 핵심 장치
+
+---
+
+### 1. 로케일이 결정하는 것
+
+| 항목 | 예 (`C` 로케일) | 예 (`ko_KR.UTF-8`) |
+| --- | --- | --- |
+| 날짜 표기 | `Thu Sep  4 13:00:00 2026` | `2026년 09월 04일 목요일 13시 00분` |
+| 숫자 소수점 | `1234.56` | `1234.56` (유럽 일부는 `1234,56`) |
+| 통화 | `$` | `₩` |
+| 정렬 순서 | 바이트 값 순 | 한글 가나다순 |
+| 오류 메시지 | `No such file or directory` | `그런 파일이나 디렉터리가 없습니다` |
+| 문자 인코딩 | ASCII | UTF-8 (한글 표현 가능) |
+
+---
+
+### 2. 로케일 이름의 구조
+
+```
+ko_KR.UTF-8
+│  │   └── 문자 인코딩
+│  └────── 국가·지역 코드 (ISO 3166-1, 대문자)
+└───────── 언어 코드 (ISO 639-1, 소문자)
+```
+
+- **`ko`** : 한국어. 영어는 `en`, 일본어 `ja`
+- **`KR`** : 대한민국. 미국 `US`, 영국 `GB`
+- **`UTF-8`** = **U**nicode **T**ransformation **F**ormat, 8비트 단위 → 전 세계 문자를 담는 표준 인코딩
+- 언어가 같아도 지역이 다르면 관습이 다르다 → `en_US`(월/일/년) vs `en_GB`(일/월/년)
+
+#### 특별한 로케일 — `C` 와 `POSIX`
+
+- **`C`**(= `POSIX`) : 어떤 지역에도 속하지 않는 **기본 로케일**. ASCII 문자, 바이트 순 정렬, 영어 메시지
+- 번역·변환을 거치지 않아 **가장 빠르고 결과가 예측 가능**
+- **스크립트에서 일부러 지정**하는 경우가 많다 (뒤의 5절)
+- `C.UTF-8` : `C` 의 규칙에 UTF-8 인코딩만 더한 것
+
+---
+
+### 3. 환경변수 체계 — 우선순위가 있다
+
+로케일은 [[#F-1. 환경변수·셸·tty 와 `su -` 가 환경을 초기화하는 이유]] 에서 다룬 **환경변수로 전달**된다.
+
+```bash
+locale
+```
+
+```text
+LANG=ko_KR.UTF-8
+LC_CTYPE="ko_KR.UTF-8"
+LC_NUMERIC="ko_KR.UTF-8"
+LC_TIME="ko_KR.UTF-8"
+LC_COLLATE="ko_KR.UTF-8"
+LC_MONETARY="ko_KR.UTF-8"
+LC_MESSAGES="ko_KR.UTF-8"
+...
+LC_ALL=
+```
+
+#### 우선순위 (시험 출제)
+
+```
+LC_ALL  >  개별 LC_*  >  LANG
+```
+
+| 변수 | 역할 |
+| --- | --- |
+| **`LC_ALL`** | **모든 항목을 강제로 덮어씀.** 최우선. 평소에는 비워 둠 |
+| **`LC_*`** (개별) | 특정 항목만 따로 지정 |
+| **`LANG`** | 지정되지 않은 나머지 전부의 **기본값** |
+
+즉 `LANG` 으로 전체를 정해 두고, 바꾸고 싶은 항목만 `LC_TIME` 처럼 개별 지정하는 방식이다. `LC_ALL` 은 **모든 설정을 무시하고 하나로 통일**하므로 일시적 강제 지정에만 쓴다.
+
+#### 주요 `LC_*` 항목
+
+| 변수 | 영향 |
+| --- | --- |
+| `LC_CTYPE` | 문자 분류·대소문자 변환·**인코딩**. 한글 입출력의 핵심 |
+| `LC_COLLATE` | **정렬 순서**. `sort`·`ls` 결과가 달라짐 |
+| `LC_TIME` | `date` 출력 형식, 요일·월 이름 |
+| `LC_NUMERIC` | 소수점·천 단위 구분 기호 |
+| `LC_MONETARY` | 통화 기호·자릿수 |
+| `LC_MESSAGES` | **프로그램 메시지 언어** |
+| `LC_PAPER` | 기본 용지 크기 (A4 / Letter) |
+
+---
+
+### 4. 조회·설정 명령
+
+```bash
+locale                     # 현재 로케일 전체
+locale -a                  # 사용 가능한 로케일 목록
+locale -a | grep ko        # 한국어 로케일이 설치돼 있는지
+localectl status           # 시스템 전역 설정
+localectl list-locales     # 설치된 로케일 목록
+```
+
+- `locale` : **현재 셸의** 로케일 관련 환경변수 출력
+- `-a` : **a**ll — 시스템에 **설치된** 로케일 전부 나열
+- `localectl` : systemd 의 로케일 제어 도구 ([[#G-1. `~d` 데몬과 `~ctl` 명령의 관계]] 의 `~ctl` 계열)
+
+#### 일시 변경 — 해당 명령에만 적용
+
+```bash
+LANG=C date
+LC_TIME=ko_KR.UTF-8 date
+LC_ALL=C ls -l
+```
+
+- 명령 **앞에** 변수를 붙이면 **그 명령의 환경에만** 적용되고 셸에는 남지 않음
+- 상속 구조상 자식 프로세스에만 전달되기 때문 ([[#F-1. 환경변수·셸·tty 와 `su -` 가 환경을 초기화하는 이유]])
+
+#### 현재 셸에만 적용
+
+```bash
+export LANG=ko_KR.UTF-8
+```
+
+#### 시스템 전역 영구 설정
+
+```bash
+sudo localectl set-locale LANG=ko_KR.UTF-8
+cat /etc/locale.conf
+```
+
+- `/etc/locale.conf` : RHEL 7 이후의 시스템 전역 로케일 설정 파일
+- 구형(RHEL 6 이하)은 `/etc/sysconfig/i18n` → **시험에서 경로를 바꿔 낸 선지 주의**
+- 로그인 시 `/etc/profile` 계열이 이 파일을 읽어 환경변수로 설정 ([[#F-2. 로그인 셸과 비로그인 셸의 차이]])
+
+#### 한국어 로케일이 없을 때
+
+RHEL 8 이후로는 로케일이 **패키지로 분리**되어 최소 설치에는 영어만 들어 있다.
+
+```bash
+locale -a | grep -i ko_KR || sudo dnf install -y glibc-langpack-ko
+localectl set-locale LANG=ko_KR.UTF-8
+```
+
+- `glibc-langpack-<언어코드>` : 해당 언어의 로케일 데이터 패키지
+- `glibc-all-langpacks` : 전체 언어 (용량 큼)
+- `localedef` 로 직접 생성도 가능하나 패키지 설치가 표준
+
+---
+
+### 5. 실무에서 문제가 되는 지점
+
+#### ① 정렬 결과가 달라진다 (`LC_COLLATE`)
+
+```bash
+printf 'b\nA\na\nB\n' | LC_ALL=C sort          # A B a b  (대문자 먼저 — 바이트 순)
+printf 'b\nA\na\nB\n' | LC_ALL=en_US.UTF-8 sort # a A b B  (사전식)
+```
+
+- 스크립트가 정렬 결과에 의존한다면 **로케일에 따라 동작이 달라진다**
+- `sort`·`uniq`·`comm`·`join` 은 정렬 순서를 전제로 하므로 특히 위험 ([[LAB/04-file-text-shell]] 4절)
+
+#### ② 메시지 언어 때문에 파싱이 깨진다 (`LC_MESSAGES`)
+
+```bash
+LC_ALL=C df -h            # 영어 헤더 — grep 패턴이 안정적
+```
+
+- 스크립트에서 명령 출력을 `grep` 으로 걸러낼 때, 로케일이 바뀌면 **문자열이 번역되어 매칭 실패**
+- 그래서 스크립트 상단에 `export LC_ALL=C` 를 넣는 것이 관례
+
+#### ③ 소수점 기호 (`LC_NUMERIC`)
+
+일부 유럽 로케일은 소수점이 쉼표(`1234,56`)다. `awk` 로 실수를 계산하는 스크립트가 그 환경에서 오작동한다.
+
+#### ④ SSH 접속 시 클라이언트 로케일이 넘어온다
+
+```text
+-bash: warning: setlocale: LC_CTYPE: cannot change locale (ko_KR.UTF-8): No such file or directory
+```
+
+- SSH 클라이언트의 `LANG`·`LC_*` 가 **서버로 전달**되는데, 서버에 그 로케일이 없으면 이 경고가 뜬다
+- `TERM` 이 서버에 없어서 났던 문제와 **같은 구조**다 ([[#A-6. `unknown terminal type` 오류]])
+- 해결 방법 세 가지
+
+| 방법 | 내용 |
+| --- | --- |
+| 서버에 설치 | `sudo dnf install glibc-langpack-ko` |
+| 서버가 안 받도록 | `/etc/ssh/sshd_config` 의 `AcceptEnv LANG LC_*` 를 주석 처리 |
+| 클라이언트가 안 보내도록 | `~/.ssh/config` 에서 해당 Host 의 `SendEnv` 제거 |
+
+---
+
+### 6. 문자 인코딩과의 관계
+
+로케일의 인코딩 부분(`.UTF-8`)은 **문자를 바이트로 표현하는 방식**을 정한다.
+
+| 인코딩 | 특징 |
+| --- | --- |
+| **ASCII** | 영문·숫자·기호 128자. 1바이트 |
+| **EUC-KR** | 과거 한국 표준. 한글 2바이트 |
+| **CP949** | EUC-KR 확장 (윈도 계열) |
+| **UTF-8** | 전 세계 문자. ASCII 와 호환, 한글은 3바이트 |
+
+- 한글이 깨져 보이면 **파일의 인코딩과 로케일의 인코딩이 다른 것**
+- 변환 도구는 `iconv`
+
+```bash
+file -i doc.txt                              # 인코딩 추정
+iconv -f EUC-KR -t UTF-8 doc.txt > doc_utf8.txt
+```
+
+- `file -i` : MIME 형식과 **charset** 표시
+- `iconv` : **i**nternationalization **conv**ersion
+  - `-f` : **f**rom — 원본 인코딩
+  - `-t` : **t**o — 변환할 인코딩
+  - `-c` : 변환 불가 문자를 버리고 진행
+
+---
+
+### 7. 실습 환경 권장 설정
+
+절차서는 **영어 로케일 유지**를 전제로 한다.
+
+- 오류 메시지가 영어여야 검색이 쉽고, 기출 문제의 출력 예시와도 일치
+- 시간대만 한국으로 맞추면 로그 시각 해석에 충분
+
+```bash
+localectl status
+sudo timedatectl set-timezone Asia/Seoul
+date
+```
+
+- **로케일과 시간대는 별개 설정**이다. `localectl` 은 언어·문자, `timedatectl` 은 시간대를 다룬다 → 혼동 주의
+
+> 📝 **시험 포인트** : 우선순위 **`LC_ALL` > `LC_*` > `LANG`**. 시스템 전역 파일은 **`/etc/locale.conf`**(구형 `/etc/sysconfig/i18n`). `locale -a` 로 설치 목록 확인, `localectl set-locale` 로 영구 설정. 로케일 이름은 **언어_지역.인코딩**. `LC_COLLATE` 가 `sort` 결과를 바꿈. 로케일(`localectl`)과 시간대(`timedatectl`)는 **다른 설정**
+
+관련 항목: [[#F-1. 환경변수·셸·tty 와 `su -` 가 환경을 초기화하는 이유]] · [[#A-6. `unknown terminal type` 오류]] · 절차서 [[LAB/01-vm-setup-and-inspection]] 3-8
 
 ---
 
