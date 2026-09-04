@@ -48,6 +48,7 @@ updated: 2026-09-04
 
 ### F. 셸·프로세스 환경
 - [[#F-1. 환경변수·셸·tty 와 `su -` 가 환경을 초기화하는 이유]]
+- [[#F-2. 로그인 셸과 비로그인 셸의 차이]]
 
 ---
 
@@ -1529,6 +1530,188 @@ tty (입출력 장치)
 > 📝 **시험 포인트** : 로그인 셸 초기화 파일 **순서**(`/etc/profile` → `~/.bash_profile` → `~/.bashrc` → `/etc/bashrc`)가 최빈출. `set`·`env`·`export`·`unset` 의 대상 차이. `source`/`.` 와 직접 실행의 차이. `su` 와 `su -` 의 `PATH` 문제. `tty1`(콘솔) vs `pts/N`(원격) 구분. `nohup` 이 막는 신호는 **SIGHUP(1번)**
 
 관련 항목: [[#A-6. `unknown terminal type` 오류]] · [[#C-1. wheel 그룹이란 무엇이며 sudo 와 어떤 관계인가]] · 절차서 [[LAB/01-vm-setup-and-inspection]] 2-4·7절, [[LAB/04-file-text-shell]] 7절
+
+---
+
+## F-2. 로그인 셸과 비로그인 셸의 차이
+
+**Q.** 로그인 셸과 일반(비로그인) 셸은 무엇이 다른가.
+
+**A.** **어떤 초기화 파일을 읽는가**가 다르다. 그 결과로 `PATH` 같은 환경이 갖춰지는지 여부가 갈린다.
+
+### 두 개의 축 — 여기서 헷갈린다
+
+흔히 "로그인 셸 / 일반 셸" 로 나누지만, 실제로는 **독립된 두 축**이 있다.
+
+| | **대화형** (interactive) | **비대화형** (non-interactive) |
+| --- | --- | --- |
+| **로그인** | 콘솔 로그인, SSH 접속, `su -`, `bash -l` | `bash -l -c '명령'` (드묾) |
+| **비로그인** | 터미널에서 `bash` 실행, `su`, `screen`/`tmux` 새 창 | **스크립트 실행**, `ssh 호스트 '명령'`, **cron 작업** |
+
+- **로그인 여부** : 사용자 인증을 거쳐 세션을 시작하는 셸인가
+- **대화형 여부** : 사람이 프롬프트를 보고 명령을 입력하는가
+
+이 둘의 조합에 따라 읽는 파일이 정해진다.
+
+### 읽는 파일
+
+#### ① 로그인 셸
+
+```
+/etc/profile
+  └─ /etc/profile.d/*.sh          (profile 안에서 순회 실행)
+~/.bash_profile                    (없으면 ~/.bash_login, 그것도 없으면 ~/.profile)
+  └─ ~/.bashrc                     (RHEL 계열은 bash_profile 이 여기를 호출)
+       └─ /etc/bashrc
+```
+
+- 세 후보 중 **먼저 발견된 하나만** 읽는다 → `~/.bash_profile` 이 있으면 `~/.profile` 은 무시
+- 종료할 때 `~/.bash_logout` 실행
+
+RHEL 계열 `~/.bash_profile` 의 실제 내용이다.
+
+```bash
+cat ~/.bash_profile
+```
+
+```text
+# .bash_profile
+if [ -f ~/.bashrc ]; then
+	. ~/.bashrc
+fi
+PATH=$PATH:$HOME/.local/bin:$HOME/bin
+export PATH
+```
+
+- `. ~/.bashrc` : `source` 의 축약형. **로그인 셸도 `~/.bashrc` 를 읽게 하려고** 명시적으로 호출
+- 이 호출이 없으면 로그인 시 alias 가 하나도 적용되지 않음 → 배포판이 관례적으로 넣어 둠
+
+#### ② 비로그인 대화형 셸
+
+```
+~/.bashrc
+  └─ /etc/bashrc
+```
+
+- `/etc/profile` 을 **읽지 않는다** → 시스템 전역 환경 설정이 적용되지 않음
+- 그럼에도 문제가 없는 이유는, 이미 로그인 셸이 설정해 둔 환경을 **부모로부터 상속**받기 때문 ([[#F-1. 환경변수·셸·tty 와 `su -` 가 환경을 초기화하는 이유]] 의 상속 구조)
+
+#### ③ 비대화형 셸
+
+- `$BASH_ENV` 환경변수에 파일 경로가 지정돼 있으면 그 파일만 읽음
+- 지정돼 있지 않으면 **아무 초기화 파일도 읽지 않는다**
+- `~/.bashrc` 상단에 아래 코드가 있는 이유가 이것 — 비대화형이면 즉시 빠져나감
+
+```bash
+# .bashrc 상단 (배포판 기본)
+[ -z "$PS1" ] && return          # 또는
+case $- in *i*) ;; *) return;; esac
+```
+
+- `$PS1` : 프롬프트 문자열. **비대화형 셸에는 설정되지 않음** → 비어 있으면 대화형이 아님
+- `$-` : 현재 셸에 켜진 옵션 문자 모음. **`i` 가 있으면 대화형**
+- `-z` : 문자열 길이가 **z**ero 인지 검사
+
+### 현재 셸 판별
+
+```bash
+shopt -q login_shell && echo "로그인 셸" || echo "비로그인 셸"
+[[ $- == *i* ]] && echo "대화형" || echo "비대화형"
+echo $0
+```
+
+- `shopt` = **sh**ell **opt**ions → bash 동작 옵션 조회·설정
+  - `-q` : **q**uiet — 출력 없이 종료 코드로만 결과 전달. 조건문과 조합할 때 사용
+- `$0` : 로그인 셸이면 관례적으로 **`-bash`** 처럼 앞에 하이픈이 붙음. 비로그인은 `bash`
+- `$-` 예시 값 `himBHs` — `i` 가 포함되면 대화형
+
+### 상황별 정리 (실제로 겪는 경우)
+
+| 상황 | 로그인 | 대화형 | 읽는 파일 |
+| --- | --- | --- | --- |
+| SSH 로 접속 (`ssh srv01`) | ✓ | ✓ | profile 계열 전부 |
+| UTM 콘솔·직렬 포트 로그인 | ✓ | ✓ | profile 계열 전부 |
+| `su -` / `sudo -i` | ✓ | ✓ | profile 계열 전부 |
+| 접속 후 `bash` 실행 | ✗ | ✓ | `~/.bashrc` 만 |
+| `su` / `sudo -s` | ✗ | ✓ | `~/.bashrc` 만 |
+| `tmux`·`screen` 새 창 | ✗ | ✓ | `~/.bashrc` 만 |
+| `./script.sh` 실행 | ✗ | ✗ | 없음 (`$BASH_ENV` 없으면) |
+| `ssh srv01 'hostname'` | ✗ | ✗ | 없음 |
+| **cron 작업** | ✗ | ✗ | 없음 |
+
+> macOS 의 Terminal·iTerm 은 새 창을 **로그인 셸로** 여는 반면, 리눅스 데스크톱의 터미널은 **비로그인 셸로** 연다. 같은 설정을 넣었는데 한쪽만 동작하는 원인이 대개 이것
+
+### 실무에서 갈리는 지점
+
+#### cron 의 PATH 문제 (최빈출 사고)
+
+cron 작업은 **비로그인·비대화형**이라 초기화 파일을 하나도 읽지 않는다. 그래서 `PATH` 가 극도로 짧다.
+
+```text
+PATH=/usr/bin:/bin
+```
+
+- 터미널에서 잘 되던 스크립트가 cron 에서만 `command not found` 로 실패하는 전형적 원인
+- 해결책 세 가지
+
+```bash
+# ① 스크립트 안에서 PATH 를 직접 선언
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# ② 명령을 절대경로로 작성
+/usr/sbin/xfs_growfs /srv/share
+
+# ③ crontab 파일 상단에 PATH 지정
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+30 3 * * * root /usr/local/bin/backup.sh
+```
+
+절차서 [[LAB/06-process-scheduling-diagnosis]] 7절에서 실습한다.
+
+#### 무엇을 어디에 넣을 것인가
+
+| 넣을 내용 | 위치 | 이유 |
+| --- | --- | --- |
+| 환경변수·`PATH` (개인) | `~/.bash_profile` | 로그인 시 한 번만 설정하면 **자식 프로세스가 상속** |
+| alias·함수·프롬프트 | `~/.bashrc` | **alias 는 상속되지 않아** 모든 대화형 셸에서 매번 정의해야 함 |
+| 환경변수 (전 사용자) | `/etc/profile.d/이름.sh` | `/etc/profile` 직접 수정은 패키지 업데이트 시 덮어쓰기 위험 |
+| alias (전 사용자) | `/etc/bashrc` | 비로그인 대화형 셸까지 적용 |
+| 신규 계정에 기본 제공 | `/etc/skel/.bashrc` | 계정 생성 시 홈으로 복사됨 ([[LAB/03-user-group-permission]] 1-3) |
+
+**alias 가 상속되지 않는 이유** : alias 는 환경변수가 아니라 **셸 내부 기능**이다. `export` 대상이 아니므로 자식 프로세스에 전달되지 않는다. 그래서 대화형 셸이 뜰 때마다 `~/.bashrc` 가 다시 정의해 주어야 한다.
+
+#### 설정을 고친 뒤
+
+```bash
+source ~/.bashrc        # 현재 셸에 즉시 반영
+exec bash -l            # 로그인 셸로 다시 시작
+```
+
+- `source` (= `.`) : **현재 셸 안에서** 실행 → 변경 사항이 남음
+- `exec bash -l` : 현재 셸 **프로세스를 대체**하며 로그인 셸로 재시작. 새 창을 열지 않고 전체 초기화를 다시 거치고 싶을 때
+  - `-l` = `--login` : 로그인 셸로 시작하라는 옵션
+
+### 검증 실습
+
+```bash
+# 비로그인 대화형
+bash
+shopt -q login_shell && echo LOGIN || echo NONLOGIN     # → NONLOGIN
+echo $0                                                  # → bash
+exit
+
+# 로그인
+bash -l
+shopt -q login_shell && echo LOGIN || echo NONLOGIN     # → LOGIN
+echo $0                                                  # → -bash
+exit
+```
+
+각 초기화 파일 끝에 표시 문구를 넣어 **실제 읽히는 순서를 눈으로 확인**하는 실습이 [[LAB/01-vm-setup-and-inspection]] 7절에 있다.
+
+> 📝 **시험 포인트** : 로그인 셸 초기화 **순서**(`/etc/profile` → `/etc/profile.d/*` → `~/.bash_profile` → `~/.bashrc` → `/etc/bashrc`)가 최빈출. `~/.bash_profile` · `~/.bash_login` · `~/.profile` 중 **먼저 발견된 하나만** 읽음. 종료 시 `~/.bash_logout`. 비로그인 셸은 `/etc/profile` 을 읽지 않음. cron 은 초기화 파일을 읽지 않아 `PATH` 를 직접 지정해야 함
+
+관련 항목: [[#F-1. 환경변수·셸·tty 와 `su -` 가 환경을 초기화하는 이유]] · 절차서 [[LAB/01-vm-setup-and-inspection]] 7절, [[LAB/04-file-text-shell]] 7~8절
 
 ---
 
