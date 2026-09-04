@@ -17,7 +17,8 @@ updated: 2026-09-03
 
 # LAB 01 — VM 준비와 시스템 점검
 
-- Rocky Linux 9 aarch64 ISO 직접 내려받기 → 해시 검증 → UTM VM 생성 → 첫 로그인 → SSH 접속까지의 준비 단계
+- Rocky Linux 9 aarch64 ISO 직접 내려받기 → 해시 검증 → UTM VM 생성(디스플레이·직렬 포트 포함) → 설치 → ISO 제거
+- 게스트 IP 를 호스트·게스트 양쪽에서 확인 → SSH 별칭 등록 → 직렬 콘솔 활성화까지 작업 환경 확보
 - 호스트명·시간대 설정 후 커널·CPU·메모리·디스크·부팅 과정·세션 정보를 조회 명령으로 전수 점검
 - FHS 최상위 디렉터리, 가상 파일시스템, 장치 파일 유형, inode·링크, `/etc/fstab`·`/etc/passwd` 형식 선행 학습
 - 셸 환경변수·alias·history·초기화 파일 로드 순서·man 섹션까지 실습 후 스냅샷 저장
@@ -109,18 +110,42 @@ exit=0
 
 > **상황**: README 1절 명세대로 2 vCPU / 4 GB / 시스템 디스크 40 GB + 추가 디스크 4개(5G·5G·5G·2G) 를 가진 VM 을 만든다. 추가 디스크는 Part 05 의 파티션·LVM·RAID·스왑 실습용이므로 지금 미리 붙여 둔다.
 
+#### ① 생성 마법사
+
 - UTM 실행 → **+ (Create a New Virtual Machine)** → **Virtualize** 선택 (Apple Silicon 에서 aarch64 게스트를 네이티브 가상화)
 - 운영체제 → **Linux**
 - Boot ISO Image → **Browse…** → 1-1 에서 검증한 `Rocky-9.x-aarch64-minimal.iso` 지정
-  - "Use Apple Virtualization" 체크 시 스냅샷 기능 불가 → 스냅샷을 쓰려면 **체크 해제(QEMU 백엔드)** 권장
+  - "Use Apple Virtualization" 체크 시 스냅샷 기능 불가 → **체크 해제(QEMU 백엔드)** 권장
 - Hardware → Memory **4096 MB**, CPU Cores **2**
 - Storage → **40 GB** (시스템 디스크 → 게스트에서 `/dev/vda`)
 - Shared Directory → 건너뜀 (Continue)
 - Summary → Name **srv01** → Save
-- 저장된 VM 우클릭 → **Edit** → 왼쪽 **Drives** 항목에서 **New…** 를 4회 반복
-  - Interface **VirtIO**, Size 각각 **5 GB / 5 GB / 5 GB / 2 GB** → 게스트에서 `/dev/vdb` `/dev/vdc` `/dev/vdd` `/dev/vde`
-  - 추가 순서가 장치 이름 순서와 일치하므로 5·5·5·2 순으로 추가
-- **Network** → Network Mode **Shared Network** (NAT, 서브넷 `192.168.64.0/24`) → Save
+
+#### ② 추가 디스크 4개 (VM 우클릭 → **편집**)
+
+- 좌측 **드라이브** 그룹 맨 아래 **`새로 만들기…`** 를 4회 반복
+- 인터페이스 **VirtIO**, 크기 각각 **5 GB / 5 GB / 5 GB / 2 GB** → 게스트에서 `/dev/vdb` `/dev/vdc` `/dev/vdd` `/dev/vde`
+- **추가 순서가 곧 장치 이름 순서** → 반드시 5·5·5·2 순으로 추가. 순서가 어긋나면 Part 05 의 `mkfs`·`mdadm` 이 다른 디스크를 대상으로 삼음
+- 완료 후 드라이브 목록은 **`USB 드라이브`(CD/DVD, ISO용) 1개 + `VirtIO 드라이브` 5개** = 총 6개. 이 구성이 정상이며 삭제할 항목 없음
+- 드라이브를 선택했을 때 표시되는 **크기 `196KB`** 는 용량이 아니라 **qcow2 파일의 현재 실제 사용량**. qcow2 는 쓴 만큼만 커지므로 갓 만든 5 GB 디스크도 이렇게 보임 → 실제 용량은 게스트에서 `lsblk` 로 확인
+
+#### ③ 디스플레이 카드 (⚠️ 기본값이면 화면이 검게 나옴)
+
+- 좌측 **`디스플레이`** → **에뮬레이트된 디스플레이 카드** → **`virtio-ramfb`** 선택
+- UTM 기본값 `virtio-gpu-pci` 는 게스트의 virtio-gpu 드라이버가 올라온 뒤에야 출력 → **UEFI 화면·GRUB 메뉴·초기 부팅 로그가 통째로 검게 나오고** `Display output is not active.` 만 표시됨
+- `ramfb`(단독) 는 UTM 의 UEFI 가 초기화하지 않아 `Guest has not initialized the display (yet).` 에서 멈춤 → 선택하지 말 것
+- `virtio-ramfb` 로도 커널이 화면을 넘겨받는 시점에 출력이 끊길 수 있음 → 그래서 ④ 의 직렬 포트를 함께 붙임
+
+#### ④ 직렬 포트 (콘솔 확보용, 필수)
+
+- 좌측 **`사운드`** 아래의 **`새로 만들기…`** → **`직렬 포트`** 선택 (맨 아래 드라이브 그룹의 `새로 만들기…` 가 아님)
+- 대상을 **`내장 터미널`** 로 두고 저장 → VM 실행 시 창에 **디스플레이 ↔ 직렬 포트 전환 탭**이 생김
+- 게스트 커널이 직렬로 출력하도록 지정하는 작업은 설치 후 2-4 에서 수행
+- Part 07 의 `rd.break` 복구·emergency 모드, Part 08 의 SSH 포트 변경 실패 시 **유일한 통로**가 되므로 반드시 추가
+
+#### ⑤ 네트워크
+
+- 좌측 **`네트워크`** → 네트워크 모드 **Shared Network** (NAT, 서브넷 `192.168.64.0/24`) → **저장**
 
 **검증** (설치 완료 후 게스트에서 확인 — 3-5 에서 재확인)
 
@@ -156,7 +181,17 @@ Mem:               3    ...
 - **Time & Date** → Asia/Seoul (설치 후 3-8 에서 `timedatectl` 로 재확인)
 - **Root Password** → 설정, "Allow root SSH login with password" 는 **체크 해제** (SSH 강화는 Part 08)
 - **User Creation** → Full name/User name **admin1** → **Make this user administrator** ☑ (wheel 그룹 자동 추가) → 비밀번호 설정
-- **Begin Installation** → 완료 후 **Reboot System** → UTM 에서 ISO 를 제거(Drives → CD/DVD → Clear) 하고 재시작
+- **Begin Installation** → 완료 후 **Reboot System**
+
+#### 설치 직후 — ISO 제거 (⚠️ 생략하면 설치 화면이 다시 뜸)
+
+- 재부팅하면 UEFI 가 **디스크보다 CD 를 먼저** 잡아 `Install Rocky Linux Minimal 9.x` GRUB 메뉴가 다시 나타남
+  - 이때 `Install…` 을 고르면 **방금 설치한 디스크를 처음부터 덮어씀** → 절대 선택 금지
+  - Rocky 9 의 `Troubleshooting` 하위에는 `Boot from local drive` 항목이 **없음**(구 CentOS 계열에만 존재)
+- 제거 방법 — VM 실행 중이면 창 상단 툴바의 **디스크(CD) 아이콘** → 해당 드라이브 → **꺼내기**
+- VM 정지 상태면 `srv01` 우클릭 → **편집** → 좌측 **드라이브** 그룹의 **`USB 드라이브`**(이미지 종류 `CD/DVD`) → 이미지 비우고 **저장**
+- ISO 를 뺀 뒤 재시작하면 디스크의 GRUB(`Rocky Linux 9.x`) 로 부팅
+- 한 번만 디스크로 부팅해 보려면 재시작 직후 GRUB 이 뜨기 **전에** `Esc` 를 여러 번 눌러 UEFI 설정 → **Boot Manager** → 디스크 항목 선택
 
 **검증** (첫 로그인 후)
 
@@ -185,12 +220,39 @@ vda
 
 ## 2. 첫 로그인과 원격 접속
 
-### 2-1. UTM 콘솔 로그인과 IP 확인
+### 2-1. 게스트 IP 확인 — 호스트 쪽과 게스트 쪽 두 경로
 
-> **상황**: 아직 IP 를 모르므로 UTM 콘솔에서 `admin1` 로 로그인해 DHCP 로 받은 주소를 확인한다. 이 주소로 macOS 터미널에서 SSH 접속한다.
+> **상황**: DHCP 로 받은 주소를 알아야 SSH 로 붙을 수 있다. 게스트 콘솔에서 확인하는 방법이 정석이지만, 화면이 안 나오거나 콘솔 입력이 번거로울 때를 대비해 **macOS 쪽에서 조회하는 방법**을 함께 익힌다. 이 방법은 게스트에 로그인하지 않고도 부팅 성공 여부까지 판정할 수 있어 진단용으로 유용하다.
+
+**경로 A — macOS 호스트에서 조회 (권장)**
+
+UTM 의 Shared Network 는 macOS 의 `vmnet` 공유 네트워크를 쓰므로, 호스트의 DHCP 서버가 임대 기록을 남긴다.
 
 ```bash
-# UTM 콘솔 — admin1 로그인 후
+# macOS 터미널
+cat /var/db/dhcpd_leases                 # 임대된 IP 와 MAC 목록
+ifconfig | grep -B4 '192.168.64.1'       # 게스트가 붙은 브리지 인터페이스
+```
+
+- `/var/db/dhcpd_leases` : macOS 내장 DHCP 서버의 임대 기록 — `ip_address`·`hw_address` 쌍
+- 여러 VM 이 있으면 MAC 으로 구분 → UTM 설정의 **네트워크 → MAC 주소**와 대조
+- `192.168.64.1` 은 호스트(게이트웨이) 주소이며 게스트의 기본 게이트웨이·DNS
+
+```bash
+# 응답·SSH 개방 확인 (IP 는 위에서 찾은 값)
+ping -c1 192.168.64.3
+nc -z -G2 192.168.64.3 22 && echo "sshd 응답"
+```
+
+- `nc -z` : 데이터 전송 없이 포트 개방 여부만 확인 (**z**ero-I/O)
+- `-G2` : 연결 시도 제한 2초 (macOS 판 `nc`)
+- **22 번이 열려 있으면 부팅이 끝나고 `sshd` 까지 올라온 것** → 화면이 검어도 서버는 정상
+
+**경로 B — 게스트 콘솔에서 확인 (정석)**
+
+UTM 창(디스플레이 또는 직렬 포트 탭)에서 `admin1` 로 로그인한 뒤 조회한다.
+
+```bash
 ip a                        # 전체 인터페이스 주소
 ip -4 addr show enp0s1      # IPv4 만, 인터페이스 지정
 hostname -I                 # 커널이 알고 있는 IP 목록만 간단 출력
@@ -227,6 +289,26 @@ ssh admin1@192.168.64.x            # x = 2-1 에서 확인한 값
 - `ssh <사용자>@<호스트>` : 원격 로그인. 포트 생략 시 22 (Part 08 에서 2222 로 변경 → `-p 2222` 필요)
 - 첫 접속 시 서버 호스트 키가 `~/.ssh/known_hosts` 에 저장 → 이후 키가 바뀌면 경고
 
+**별칭 등록** — 이후 모든 파트에서 `ssh srv01` 한 줄로 접속
+
+```bash
+# macOS 터미널
+cat >> ~/.ssh/config <<'EOF'
+
+Host srv01
+    HostName 192.168.64.3
+    User admin1
+EOF
+chmod 600 ~/.ssh/config
+ssh srv01
+```
+
+- `Host` : 별칭. `ssh srv01` 로 아래 설정이 적용됨
+- `HostName` : 실제 주소 — Part 08 에서 고정 IP `192.168.64.10` 으로 바꾸면 이 값만 수정
+- `User` : 생략 시 macOS 로그인 계정으로 접속 시도
+- Part 08 에서 포트를 2222 로 바꾼 뒤에는 `Port 2222`, 키 인증 후에는 `IdentityFile ~/.ssh/id_ed25519` 를 추가
+- `~/.ssh/config` 권한이 느슨하면 무시되므로 `600` 필요
+
 **검증** (VM 쪽 세션에서)
 
 ```bash
@@ -241,7 +323,45 @@ admin1   pts/0        2026-09-03 10:00 (192.168.64.1)
 
 > 📝 **시험 포인트**: `who am i`(공백 포함) 는 현재 터미널의 로그인 정보 한 줄, `whoami` 는 실효 사용자명만. `pts/N` = 원격/터미널 에뮬레이터 세션, `tty1` = 콘솔.
 
-### 2-3. su / su - / sudo -i 환경 차이
+### 2-3. 직렬 콘솔 활성화 — 커널 출력 경로 지정
+
+> **상황**: 1-2 ④ 에서 직렬 포트 장치를 붙였지만, 커널이 그쪽으로 출력하라는 지시를 받지 않으면 탭은 비어 있다. 커널 명령줄에 콘솔을 추가해 **화면과 직렬 양쪽으로 부팅 로그와 로그인 프롬프트가 나오도록** 만든다. Part 07 의 복구 실습과 Part 08 의 네트워크 변경 때 SSH 가 끊기므로, 지금 미리 확보해 둔다.
+
+```bash
+sudo grubby --update-kernel=ALL --args="console=tty0 console=ttyAMA0,115200"
+sudo grubby --info=ALL | grep -E '^(title|args)'
+```
+
+- `grubby` : GRUB 설정을 직접 편집하지 않고 부팅 항목을 다루는 도구 (Part 07 에서 상세)
+- `--update-kernel=ALL` : 설치된 **모든** 커널 항목에 적용 (`DEFAULT` 는 기본 항목만)
+- `--args="…"` : 커널 명령줄에 파라미터 추가 (제거는 `--remove-args`)
+- `console=tty0` : 그래픽 콘솔 (UTM 디스플레이 탭)
+- `console=ttyAMA0,115200` : aarch64 `virt` 머신의 PL011 직렬 포트, 속도 115200 bps
+- `console=` 를 여러 번 지정하면 모두 출력하되 **마지막에 적은 장치가 `/dev/console`**(로그인 프롬프트가 뜨는 곳)
+
+**검증**
+
+```bash
+sudo reboot
+# 재접속 후
+cat /proc/cmdline
+systemctl status serial-getty@ttyAMA0.service --no-pager | head -3
+```
+
+```text
+BOOT_IMAGE=... console=tty0 console=ttyAMA0,115200
+● serial-getty@ttyAMA0.service - Serial Getty on ttyAMA0
+     Loaded: loaded (/usr/lib/systemd/system/serial-getty@.service; ...)
+     Active: active (running) ...
+```
+
+- 재부팅 중 UTM 창의 **직렬 포트 탭**에 부팅 로그가 흐르고 로그인 프롬프트가 뜨면 성공
+- 장치 이름이 다르면 `dmesg | grep -i tty` 로 실제 이름 확인 후 `--remove-args` 로 지우고 다시 지정
+- `serial-getty@ttyAMA0` 은 `console=` 지정 시 systemd 가 자동 활성화
+
+> 📝 **시험 포인트**: 커널 파라미터 추가·삭제는 `grubby --update-kernel=ALL --args=` / `--remove-args=` 가 RHEL 9 표준. `/etc/default/grub` 수정 후 `grub2-mkconfig` 는 신규 설치 항목에만 반영되는 경우가 있어 실기에서는 `grubby` 가 정답으로 출제 (Part 07 참조).
+
+### 2-4. su / su - / sudo -i 환경 차이
 
 > **상황**: 관리 작업은 root 로 해야 하지만 `su` 와 `su -` 는 환경변수 처리가 다르다. 이후 파트에서 "PATH 에 /usr/sbin 이 없어 명령이 안 보이는" 실수를 막기 위해 차이를 직접 확인한다.
 
@@ -1694,8 +1814,13 @@ alias ll='ls -l --color=auto'
 | --- | --- | --- | --- |
 | ISO SHA-256 검증 | `shasum -a 256 -c CHECKSUM --ignore-missing` | `OK` 출력, exit 0 | ☐ |
 | VM 생성 (2 vCPU/4 GB/40 GB + 5·5·5·2 GB) | UTM GUI | `lsblk -d` 에 vda~vde, `nproc`=2 | ☐ |
+| 디스플레이 카드 `virtio-ramfb` 지정 | UTM 편집 → 디스플레이 | 부팅 시 UEFI·GRUB 화면 표시 | ☐ |
+| 직렬 포트 추가 (내장 터미널) | UTM 편집 → 새로 만들기 → 직렬 포트 | VM 창에 직렬 탭 생성 | ☐ |
 | Rocky 9 minimal 설치, admin1 wheel | Anaconda | `id admin1` 에 `10(wheel)` | ☐ |
-| DHCP IP 확인·SSH 접속 | `ip a`, `ssh admin1@<ip>` | `who am i` 에 pts/0 + 192.168.64.1 | ☐ |
+| 설치 후 ISO 제거 | 툴바 CD 아이콘 → 꺼내기 | 재부팅 시 설치 메뉴 대신 Rocky GRUB | ☐ |
+| 게스트 IP 확인 (호스트 경로) | `cat /var/db/dhcpd_leases`, `nc -z <ip> 22` | MAC 일치 항목의 IP, 22번 열림 | ☐ |
+| SSH 접속·별칭 등록 | `ssh admin1@<ip>`, `~/.ssh/config` | `ssh srv01` 로 접속, `who am i` 에 pts/0 | ☐ |
+| 직렬 콘솔 활성화 | `grubby --update-kernel=ALL --args="console=tty0 console=ttyAMA0,115200"` | `cat /proc/cmdline`, 직렬 탭에 로그인 프롬프트 | ☐ |
 | su / su - / sudo -i 차이 | `echo $PATH; pwd` | `su -`·`sudo -i` 만 `/root`, PATH 에 sbin | ☐ |
 | 호스트명 srv01.lab.local | `hostnamectl set-hostname` | `hostname -f`, `cat /etc/hostname` | ☐ |
 | /etc/hosts 에 192.168.64.10 등록 | `cat >> /etc/hosts` | `getent hosts srv01` | ☐ |
@@ -1738,7 +1863,8 @@ alias ll='ls -l --color=auto'
 | --- | --- |
 | EXAM-PRACTICAL r04-4 (SHA-256 해시 계산 명령), EXAM-WRITTEN-FULL r06-96 (충돌 발견 해시 대신 사용할 알고리즘) | 1-1 ISO 해시 검증 |
 | EXAM-WRITTEN-FULL r02-46 (장치 파일명 — `/dev/vda` virtio) | 1-2 VM 생성, 6-3 장치 파일 |
-| EXAM-WRITTEN-FULL r03-21, r07-60 (`su` 와 `sudo` 차이) | 2-3 su / su - / sudo -i |
+| EXAM-WRITTEN-FULL r03-21, r07-60 (`su` 와 `sudo` 차이) | 2-4 su / su - / sudo -i |
+| EXAM-WRITTEN-FULL r02-31, r07-33 (`grubby --update-kernel`·커널 파라미터 추가) | 2-3 직렬 콘솔 활성화 · Part 07 |
 | EXAM-WRITTEN-FULL r03-1, r04-3 (커널 버전 표기) | 3-3 커널·OS |
 | EXAM-WRITTEN-FULL r08-28 (`free -h` 해석), r05-1·r10-1 (커널 역할) | 3-4 CPU·메모리 |
 | EXAM-WRITTEN-FULL r08-26 (`df -h` 해석), r08-47 (`lsblk` 해석), r04-34 (`df -i` inode), r04-55 (UUID·FS 유형 확인) | 3-5 디스크, 6-4 inode |
