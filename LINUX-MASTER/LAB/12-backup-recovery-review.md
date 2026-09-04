@@ -3467,7 +3467,7 @@ ls ~/lab-backup 2>/dev/null || echo "(macOS 에서 확인)"
 ```
 
 ```text
-/dev/mapper/rl-root  ...  ...% /
+/dev/mapper/rlm-root  ...  ...% /
 /dev/vdb1            2.0G ...% /data
 /dev/md0             5.0G ...% /srv/raid
 ...

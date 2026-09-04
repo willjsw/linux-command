@@ -171,11 +171,12 @@ Mem:               3    ...
 
 ### 1-3. Rocky Linux 9 설치 시 선택 항목
 
-> **상황**: Anaconda 설치 프로그램에서 파티션은 자동(LVM `rl` VG), root 비밀번호 설정, 관리자 계정 `admin1` 을 wheel 그룹 포함으로 생성한다. 이 값이 이후 파트의 전제다.
+> **상황**: Anaconda 설치 프로그램에서 파티션은 자동(LVM VG `rlm`), root 비밀번호 설정, 관리자 계정 `admin1` 을 wheel 그룹 포함으로 생성한다. 이 값이 이후 파트의 전제다.
 
 - VM 시작 → GRUB 메뉴 **Install Rocky Linux 9** → 언어 **English (United States)** (한글 로케일은 3-8 에서 참고 설정)
 - **Installation Destination** → `vda` 40 GiB 만 선택 (vdb~vde 는 선택 해제) → Storage Configuration **Automatic** → Done
-  - 자동 파티션 결과: `/boot/efi`(vfat) · `/boot`(xfs) · LVM VG `rl` 의 `root`·`swap` LV
+  - 자동 파티션 결과: `/boot/efi`(vfat) · `/boot`(xfs) · LVM VG `rlm` 의 `root`·`swap` LV
+  - **VG 이름은 설치 매체에 따라 다름** — Minimal ISO 는 `rlm`, DVD ISO 는 `rl`. 이후 절차서의 `rlm-root`·`rlm-swap` 은 `lsblk` 로 확인한 실제 이름으로 치환
 - **Software Selection** → **Minimal Install** (X 윈도 미설치 — 이후 GUI 항목은 `※ 미실행`)
 - **Network & Host Name** → `enp0s1` 스위치 **ON** (DHCP) · Host Name 은 비워 둠 (3-1 에서 명령으로 설정)
 - **Time & Date** → Asia/Seoul (설치 후 3-8 에서 `timedatectl` 로 재확인)
@@ -210,8 +211,8 @@ vda
 ├─vda1      vfat        ... /boot/efi
 ├─vda2      xfs         ... /boot
 └─vda3      LVM2_member
-  ├─rl-root xfs         ... /
-  └─rl-swap swap        ... [SWAP]
+  ├─rlm-root xfs         ... /
+  └─rlm-swap swap        ... [SWAP]
 ```
 
 > 📝 **시험 포인트**: 설치 시 "관리자로 지정" = `wheel` 그룹(GID 10) 추가 → `/etc/sudoers` 의 `%wheel ALL=(ALL) ALL` 로 sudo 권한. UEFI 부팅은 `/boot/efi`(ESP, vfat) 파티션이 반드시 존재.
@@ -322,6 +323,49 @@ admin1   pts/0        2026-09-03 10:00 (192.168.64.1)
 ```
 
 > 📝 **시험 포인트**: `who am i`(공백 포함) 는 현재 터미널의 로그인 정보 한 줄, `whoami` 는 실효 사용자명만. `pts/N` = 원격/터미널 에뮬레이터 세션, `tty1` = 콘솔.
+
+**터미널 종류(TERM) 문제 해결** — Ghostty·Kitty·WezTerm 등 최신 터미널 사용 시 필수
+
+접속 직후 `clear` 나 `top` 이 `'xterm-ghostty': unknown terminal type.` 으로 실패하면, 클라이언트가 보낸 `TERM` 값에 해당하는 terminfo 정의가 서버에 없는 것이다. `vi`(Part 04) · `top`(Part 06) · `less` · `nmtui`(Part 08) 등 화면을 그리는 프로그램이 모두 같은 이유로 실패하므로 먼저 해결한다.
+
+```bash
+# macOS 터미널 (SSH 세션이 아닌 로컬)
+infocmp -x | ssh srv01 -- tic -x -
+```
+
+- `infocmp -x` : 로컬 터미널의 terminfo 정의를 텍스트로 출력 (**x**: 확장 기능 포함). 인자를 생략하면 현재 `$TERM` 대상
+- `tic -x -` : 표준 입력으로 받은 정의를 컴파일해 설치 (**t**erminfo **c**ompiler)
+- 서버의 `~/.terminfo/` 에 저장 → root 권한 불필요, 해당 사용자에게만 적용
+- 서버에 `tic` 이 없으면 `sudo dnf install -y ncurses` 로 설치 후 재시도
+
+간단한 대안 — 서버 쪽에서 표준 터미널 종류로 고정 (Ghostty 고유 기능은 포기)
+
+```bash
+echo 'export TERM=xterm-256color' >> ~/.bashrc
+source ~/.bashrc
+```
+
+**검증**
+
+```bash
+echo $TERM
+clear && echo "clear 정상"
+tput cols; tput lines
+infocmp | head -1
+```
+
+```text
+xterm-ghostty
+clear 정상
+120
+30
+#	Reconstructed via infocmp from file: /home/admin1/.terminfo/x/xterm-ghostty
+```
+
+- `tput cols`/`lines` : terminfo 를 읽어 터미널 크기 조회 → 숫자가 나오면 정상 인식
+- `infocmp` 첫 줄의 경로로 어느 정의를 쓰는지 확인
+
+> 📝 **시험 포인트**: `TERM` 은 터미널 종류를 알려주는 환경변수이며 정의는 `/usr/share/terminfo/` 에 저장(구형은 `/etc/termcap`). 화면 제어 프로그램이 커서 이동·색상 제어 문자열을 여기서 조회 (Part 01 7절 환경변수 참조).
 
 ### 2-3. 직렬 콘솔 활성화 — 커널 출력 경로 지정
 
@@ -604,7 +648,7 @@ vdc   5G
 vdd   5G
 vde   2G
 Filesystem Type Mounted
-/dev/mapper/rl-root xfs /
+/dev/mapper/rlm-root xfs /
 /dev/vda2 xfs /boot
 /dev/vda1 vfat /boot/efi
 ```
@@ -791,7 +835,7 @@ grep -o 'root=[^ ]*' /proc/cmdline
 ```
 
 ```text
-root=/dev/mapper/rl-root
+root=/dev/mapper/rlm-root
 running = default kernel
 ```
 
@@ -1304,7 +1348,7 @@ findmnt --verify                 # 문법·장치 존재 검사
 blkid                            # UUID 와 fstab 대조
 ```
 
-- 필드 1 : 장치 — `/dev/mapper/rl-root`, `UUID=…`, `LABEL=…`
+- 필드 1 : 장치 — `/dev/mapper/rlm-root`, `UUID=…`, `LABEL=…`
 - 필드 2 : 마운트 포인트 (`/`, `/boot`, `/boot/efi`, 스왑은 `none`)
 - 필드 3 : 파일시스템 유형 (`xfs`, `vfat`, `swap`, `ext4`, `nfs`)
 - 필드 4 : 마운트 옵션 (`defaults` = rw,suid,dev,exec,auto,nouser,async / `noauto`, `ro`, `nosuid`, `usrquota` 등)
@@ -1820,18 +1864,19 @@ alias ll='ls -l --color=auto'
 | 설치 후 ISO 제거 | 툴바 CD 아이콘 → 꺼내기 | 재부팅 시 설치 메뉴 대신 Rocky GRUB | ☐ |
 | 게스트 IP 확인 (호스트 경로) | `cat /var/db/dhcpd_leases`, `nc -z <ip> 22` | MAC 일치 항목의 IP, 22번 열림 | ☐ |
 | SSH 접속·별칭 등록 | `ssh admin1@<ip>`, `~/.ssh/config` | `ssh srv01` 로 접속, `who am i` 에 pts/0 | ☐ |
+| terminfo 설치 (TERM 오류 시) | `infocmp -x \| ssh srv01 -- tic -x -` | `clear`·`tput cols` 정상 동작 | ☐ |
 | 직렬 콘솔 활성화 | `grubby --update-kernel=ALL --args="console=tty0 console=ttyAMA0,115200"` | `cat /proc/cmdline`, 직렬 탭에 로그인 프롬프트 | ☐ |
 | su / su - / sudo -i 차이 | `echo $PATH; pwd` | `su -`·`sudo -i` 만 `/root`, PATH 에 sbin | ☐ |
 | 호스트명 srv01.lab.local | `hostnamectl set-hostname` | `hostname -f`, `cat /etc/hostname` | ☐ |
 | /etc/hosts 에 192.168.64.10 등록 | `cat >> /etc/hosts` | `getent hosts srv01` | ☐ |
 | 커널·OS 식별 | `uname -a/-r/-m`, `cat /etc/os-release` | `el9`, `aarch64`, `ID="rocky"` | ☐ |
 | CPU·메모리 | `lscpu`, `free -h`, `/proc/cpuinfo`, `/proc/meminfo` | 코어 2, MemTotal ≈ 3.7 GiB | ☐ |
-| 디스크·FS | `lsblk -f`, `df -hT`, `df -i` | vda1 vfat·vda2 xfs·rl-root xfs | ☐ |
+| 디스크·FS | `lsblk -f`, `df -hT`, `df -i` | vda1 vfat·vda2 xfs·rlm-root xfs | ☐ |
 | PCI/USB/DMI | `lspci`, `lsusb`, `dmidecode -t system` | virtio 장치 표시 | ☐ |
 | 시간대 Asia/Seoul, NTP | `timedatectl set-timezone`, `set-ntp true` | `date +%Z` = KST, `/etc/localtime` 링크 | ☐ |
 | 로케일·키맵 조회 | `localectl`, `list-locales` | `LANG=en_US.UTF-8` | ☐ |
 | 부팅 시간 분석 | `systemd-analyze`, `blame`, `critical-chain` | Startup finished 줄 | ☐ |
-| 커널 인자·/boot | `cat /proc/cmdline`, `ls /boot`, `rpm -q kernel`, `grubby --default-kernel` | `root=/dev/mapper/rl-root`, 실행 커널 = 기본 커널 | ☐ |
+| 커널 인자·/boot | `cat /proc/cmdline`, `ls /boot`, `rpm -q kernel`, `grubby --default-kernel` | `root=/dev/mapper/rlm-root`, 실행 커널 = 기본 커널 | ☐ |
 | 런레벨·타겟 | `systemctl get-default`, `runlevel`, `who -r` | `multi-user.target`, `N 3` | ☐ |
 | 하드웨어 인식·오류 로그 | `dmesg -T \| grep -i virtio`, `journalctl -b -p err` | virtio 줄 존재, err 0건 | ☐ |
 | 세션 정보 | `who`, `w`, `id`, `tty`, `logname` | 세션 2개(tty1, pts/0) | ☐ |

@@ -357,7 +357,7 @@ df -hT /srv | tail -1
 ```
 
 ```text
-/dev/mapper/rl-root xfs   ...G  ...G  ...G  ..% /
+/dev/mapper/rlm-root xfs   ...G  ...G  ...G  ..% /
 ```
 
 > 📝 **시험 포인트**: 여유 공간이 있어도 `touch` 실패 → `df -i` 로 inode 고갈 확인(필기 기출). `du` 는 실제 사용 블록, `ls -l` 은 논리 크기(sparse 파일 차이).

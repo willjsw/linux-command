@@ -37,7 +37,7 @@ updated: 2026-09-03
 | 하이퍼바이저 | UTM 4.x (Apple Silicon) — **QEMU 백엔드** ('Use Apple Virtualization' 체크 해제) | 스냅샷 사용 가능. 중첩 가상화 미지원 → Part 11 `virsh` 는 조회 위주 |
 | 게스트 OS | Rocky Linux 9.x **aarch64** minimal ISO — **직접 다운로드 필요** ([[01-vm-setup-and-inspection]] 1-0) | 시험 기준 RHEL 계열. x86_64 차이는 각 파트에 명시 |
 | CPU / RAM          | 2 vCPU / 4 GB                                                                       | `top` 진단 시 부하 재현용                          |
-| 시스템 디스크            | `/dev/vda` 40 GB (자동 파티션: `/boot/efi`, `/boot`, LVM `rl` VG)                        | UTM virtio → **`vd*`** 표기. SATA 선택 시 `sd*` |
+| 시스템 디스크            | `/dev/vda` 40 GB (자동 파티션: `/boot/efi`, `/boot`, LVM VG `rlm`)                        | UTM virtio → **`vd*`** 표기. SATA 선택 시 `sd*` |
 | 추가 디스크             | `/dev/vdb` 5 GB · `/dev/vdc` 5 GB · `/dev/vdd` 5 GB · `/dev/vde` 2 GB               | UTM 설정 → Drives → New… (VirtIO) 로 4개 추가    |
 | 네트워크               | Shared Network (NAT) — 인터페이스 `enp0s1`, 서브넷 `192.168.64.0/24`, GW/DNS `192.168.64.1` | 실제 값은 `ip a` 로 확인 후 치환                     |
 | 고정 IP (Part 08 이후) | `192.168.64.10/24`                                                                  | 그 전까지 DHCP                                 |

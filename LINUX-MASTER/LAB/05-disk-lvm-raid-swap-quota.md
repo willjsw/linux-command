@@ -103,8 +103,8 @@ vda         252:0    0   40G  0 disk
 ├─vda1      252:1    0  600M  0 part /boot/efi
 ├─vda2      252:2    0    1G  0 part /boot
 └─vda3      252:3    0 38.4G  0 part
-  ├─rl-root 253:0    0  ...   0 lvm  /
-  └─rl-swap 253:1    0  ...   0 lvm  [SWAP]
+  ├─rlm-root 253:0    0  ...   0 lvm  /
+  └─rlm-swap 253:1    0  ...   0 lvm  [SWAP]
 vdb         252:16   0    5G  0 disk
 vdc         252:32   0    5G  0 disk
 vdd         252:48   0    5G  0 disk
@@ -789,7 +789,7 @@ blkid /dev/vdb2
 
 ```text
 NAME         TYPE      SIZE PRIO
-/dev/dm-1    partition   4G   -2        ← 설치 시 만든 rl-swap
+/dev/dm-1    partition   4G   -2        ← 설치 시 만든 rlm-swap
 /dev/vdb2    partition   1G   -3
 /dev/vdb2: LABEL="SWAP1" UUID="...." TYPE="swap" PARTUUID="....-02"
 ```
@@ -820,7 +820,7 @@ grep swap /etc/fstab
 
 ```text
 /dev/vdb2 partition 1G 0B   -2
-/dev/mapper/rl-swap none swap defaults 0 0
+/dev/mapper/rlm-swap none swap defaults 0 0
 UUID=....  swap  swap  defaults  0 0
 ```
 

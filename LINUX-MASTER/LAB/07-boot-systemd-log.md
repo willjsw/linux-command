@@ -40,7 +40,7 @@ updated: 2026-09-03
 | --- | --- | --- | --- | --- |
 | 1 | 전원 ON → 펌웨어 | UEFI(BIOS) — POST, 부팅 장치 선택 | `efibootmgr -v`, `/sys/firmware/efi` | 펌웨어 화면에서 정지, "No bootable device" |
 | 2 | 부트로더 | GRUB2 (ESP 의 `shimaa64.efi` → `grubaa64.efi`) | `/boot/efi/EFI/rocky/`, `/boot/grub2/grub.cfg`, `/boot/loader/entries/*.conf` | `grub>` 프롬프트, 메뉴 미표시 |
-| 3 | 커널 + initramfs | `vmlinuz` 적재, `initramfs` 를 임시 루트로 전개, 실제 루트(LVM `rl-root`) 마운트 | `/boot/vmlinuz-*`, `/boot/initramfs-*.img`, `/proc/cmdline`, `dmesg` | Kernel panic, `dracut:/#` 셸 |
+| 3 | 커널 + initramfs | `vmlinuz` 적재, `initramfs` 를 임시 루트로 전개, 실제 루트(LVM `rlm-root`) 마운트 | `/boot/vmlinuz-*`, `/boot/initramfs-*.img`, `/proc/cmdline`, `dmesg` | Kernel panic, `dracut:/#` 셸 |
 | 4 | systemd(PID 1) | `/sbin/init` → `systemd`, 유닛 병렬 기동 | `ls -l /sbin/init`, `journalctl -b`, `systemd-analyze` | 특정 유닛 failed, emergency/rescue 진입 |
 | 5 | default.target | `multi-user.target`(콘솔) 또는 `graphical.target` → 로그인 프롬프트 | `systemctl get-default` | 로그인 불가(비번 분실) |
 
@@ -112,7 +112,7 @@ lsinitrd /boot/initramfs-$(uname -r).img | grep -E '^Version|dracut modules'
 
 ```text
 # cat /proc/cmdline
-BOOT_IMAGE=(hd0,gpt2)/vmlinuz-5.14.0-...aarch64 root=/dev/mapper/rl-root ro crashkernel=... rd.lvm.lv=rl/root rd.lvm.lv=rl/swap rhgb quiet
+BOOT_IMAGE=(hd0,gpt2)/vmlinuz-5.14.0-...aarch64 root=/dev/mapper/rlm-root ro crashkernel=... rd.lvm.lv=rl/root rd.lvm.lv=rl/swap rhgb quiet
 # lsinitrd | head
 Image: /boot/initramfs-5.14.0-...aarch64.img: ...M
 ========================================================================
@@ -122,7 +122,7 @@ systemd
 ...
 ```
 
-> 📝 **시험 포인트**: `dracut --force` 는 initramfs 재생성, `grub2-mkconfig` 는 GRUB 설정 반영 — 필기 r05-6 처럼 "GRUB 변경 반영 명령" 오답 선지로 등장. `root=/dev/mapper/rl-root ro` — 루트를 **읽기 전용**으로 먼저 마운트한 뒤 systemd 가 rw 재마운트.
+> 📝 **시험 포인트**: `dracut --force` 는 initramfs 재생성, `grub2-mkconfig` 는 GRUB 설정 반영 — 필기 r05-6 처럼 "GRUB 변경 반영 명령" 오답 선지로 등장. `root=/dev/mapper/rlm-root ro` — 루트를 **읽기 전용**으로 먼저 마운트한 뒤 systemd 가 rw 재마운트.
 
 ### 1-3. 부팅 로그 — dmesg · journalctl -b
 
@@ -316,7 +316,7 @@ cat /proc/cmdline                               # 실제 적용 확인 — 콘�
 index=0
 kernel="/boot/vmlinuz-5.14.0-...aarch64"
 args="ro crashkernel=... rd.lvm.lv=rl/root rd.lvm.lv=rl/swap"
-root="/dev/mapper/rl-root"
+root="/dev/mapper/rlm-root"
 initrd="/boot/initramfs-5.14.0-...aarch64.img"
 title="Rocky Linux (5.14.0-...aarch64) 9.x (Blue Onyx)"
 id="...-5.14.0-...aarch64"
@@ -1698,7 +1698,7 @@ systemctl status lab-monitor --no-pager | head -3
 | 수행 항목 | 명령 | 확인 방법 | ☐ |
 | --- | --- | --- | --- |
 | UEFI·ESP·BLS 구조 확인 | `ls /boot/efi/EFI/rocky/`, `efibootmgr -v`, `ls /boot/loader/entries/` | 파일 목록 출력 | ☐ |
-| 커널 파라미터·initramfs 확인 | `cat /proc/cmdline`, `lsinitrd \| head` | `root=/dev/mapper/rl-root` 확인 | ☐ |
+| 커널 파라미터·initramfs 확인 | `cat /proc/cmdline`, `lsinitrd \| head` | `root=/dev/mapper/rlm-root` 확인 | ☐ |
 | 부팅 로그·분석 | `journalctl -b`, `--list-boots`, `systemd-analyze blame/critical-chain/plot` | `/root/boot.svg` 생성 | ☐ |
 | GRUB_TIMEOUT=10 반영 | `/etc/default/grub` → `grub2-mkconfig -o /boot/grub2/grub.cfg` | `grep 'set timeout' /boot/grub2/grub.cfg`, 재부팅 메뉴 10초 | ☐ |
 | grubby 로 파라미터 제거 | `grubby --update-kernel=ALL --remove-args="rhgb quiet"` | `grubby --info=DEFAULT`, 재부팅 후 `/proc/cmdline` | ☐ |
