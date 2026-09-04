@@ -63,6 +63,7 @@ updated: 2026-09-04
 
 ### J. 부팅·systemd
 - [[#J-1. `systemd-analyze critical-chain` 출력 해석]]
+- [[#J-2. 타겟(target)과 런레벨(runlevel)이란 정확히 무엇인가]]
 
 ### K. 소켓·파일 디스크립터
 - [[#K-1. 소켓이란 무엇인가 — 파일 디스크립터와 함께]]
@@ -3039,6 +3040,253 @@ systemctl list-sockets
 > 📝 **시험 포인트** : FD **0=stdin, 1=stdout, 2=stderr**. `2>&1` 의 의미와 **순서에 따른 차이**. `ls -l` 첫 글자 **`s`=소켓, `p`=파이프, `b`=블록, `c`=문자**. `ss` 는 `netstat` 대체이며 옵션 `-tulnp` 조합이 최빈출. `lsof` 는 열린 파일·소켓 조회. 유닉스 도메인 소켓은 **파일 권한으로 접근 제어**. TCP=`SOCK_STREAM`, UDP=`SOCK_DGRAM`
 
 관련 항목: [[#D-3. `ip addr` 출력 전체 해설]] · [[#F-4. `pstree` 출력 — 최소 설치 Rocky 9 의 프로세스 전수 해설]] · [[#J-1. `systemd-analyze critical-chain` 출력 해석]] · 절차서 [[LAB/04-file-text-shell]] 6·10절, [[LAB/06-process-scheduling-diagnosis]] 5절, [[LAB/08-network-config]] 5절
+
+---
+
+## J-2. 타겟(target)과 런레벨(runlevel)이란 정확히 무엇인가
+
+**Q.** 타겟이란 정확히 무엇인가. 런레벨은 무엇인가.
+
+**A.** 둘 다 **"시스템을 어떤 상태로 만들 것인가"** 를 나타낸다. **런레벨은 옛 방식(SysV init), 타겟은 현재 방식(systemd)** 이며, 타겟이 런레벨을 대체하면서 **훨씬 넓은 개념**이 되었다.
+
+---
+
+### 1. 런레벨 — 옛 방식
+
+- **runlevel** : SysV init 시절, 시스템의 동작 모드를 **0~6 숫자**로 정의한 것
+- 각 번호마다 "어떤 서비스를 켜고 끌지" 가 미리 정해져 있음
+
+#### 동작 방식
+
+```
+/etc/inittab 에 기본 런레벨 지정      id:3:initdefault:
+        │
+        ▼
+/etc/rc.d/rc3.d/ 디렉터리를 순서대로 실행
+        ├─ K01xxx  → 중지(Kill)할 서비스
+        └─ S85httpd → 시작(Start)할 서비스
+```
+
+| 특징 | 내용 |
+| --- | --- |
+| 식별자 | **숫자** 0~6 |
+| 배타성 | 한 번에 **하나만** 활성 |
+| 실행 방식 | 심볼릭 링크 이름의 **번호 순서대로 하나씩** → 느림 |
+| 설정 파일 | `/etc/inittab` |
+| 전환 명령 | `init 3` · `telinit 3` |
+
+- 심볼릭 링크 이름의 `S85` 에서 `85` 는 **실행 순서**. 앞의 것이 끝나야 다음이 시작 → 병렬 처리 불가
+- RHEL 7 부터 systemd 로 대체. **`/etc/inittab` 은 남아 있지만 안내 문구만 들어 있다**
+
+```bash
+cat /etc/inittab
+```
+
+```text
+# inittab is no longer used.
+#
+# ADDING CONFIGURATION HERE WILL HAVE NO EFFECT ON YOUR SYSTEM.
+...
+```
+
+> 📝 시험에서 `/etc/inittab` 의 형식(`id:3:initdefault:`)을 묻는 문제가 여전히 출제된다. **동작하지 않지만 개념은 알아야 한다**
+
+---
+
+### 2. 타겟 — 현재 방식
+
+- **target** : systemd의 **유닛(unit) 종류 중 하나**. 확장자가 `.target`
+- **여러 유닛을 묶는 그룹이자, "여기까지 도달했다" 를 나타내는 동기화 지점**
+- **실행 파일이 없다.** 타겟 자체는 아무것도 실행하지 않는다 → [[#J-1. `systemd-analyze critical-chain` 출력 해석]] 에서 `.target` 에 `+`(소요 시간)가 없던 이유
+
+#### systemd 유닛의 종류
+
+| 확장자 | 대상 |
+| --- | --- |
+| `.service` | 데몬·프로그램 |
+| **`.target`** | **유닛 묶음·동기화 지점** |
+| `.socket` | 소켓 ([[#K-1. 소켓이란 무엇인가 — 파일 디스크립터와 함께]]) |
+| `.mount` · `.automount` | 마운트 지점 |
+| `.timer` | 예약 실행 (cron 대체) |
+| `.path` | 파일·디렉터리 변화 감시 |
+| `.slice` | cgroup 자원 그룹 |
+| `.device` | 장치 |
+| `.swap` | 스왑 영역 |
+
+#### 타겟 파일 들여다보기
+
+```bash
+systemctl cat multi-user.target
+```
+
+```text
+[Unit]
+Description=Multi-User System
+Documentation=man:systemd.special(7)
+Requires=basic.target
+Conflicts=rescue.service rescue.target
+After=basic.target rescue.service rescue.target
+AllowIsolate=yes
+```
+
+- `Requires=basic.target` : **basic.target 이 반드시 성공해야** 이 타겟이 성립
+- `After=` : 순서 지정 (의존성과 별개로 "먼저 끝나야 함")
+- `Conflicts=` : 함께 활성화될 수 없는 유닛 → rescue 와 multi-user 는 동시에 못 감
+- `AllowIsolate=yes` : `systemctl isolate` 로 **전환 대상이 될 수 있음**
+- **실행할 프로그램(`ExecStart=`)이 없다** → 타겟의 본질이 "상태 표시" 임을 보여줌
+
+---
+
+### 3. 그럼 타겟은 어떻게 서비스를 끌어오는가
+
+**`.wants` 디렉터리의 심볼릭 링크**로 한다.
+
+```bash
+ls -l /etc/systemd/system/multi-user.target.wants/
+```
+
+```text
+sshd.service -> /usr/lib/systemd/system/sshd.service
+crond.service -> /usr/lib/systemd/system/crond.service
+firewalld.service -> /usr/lib/systemd/system/firewalld.service
+...
+```
+
+**`systemctl enable` 이 하는 일이 정확히 이 링크를 만드는 것이다.**
+
+```bash
+sudo systemctl enable httpd
+# → /etc/systemd/system/multi-user.target.wants/httpd.service 링크 생성
+```
+
+- 어느 타겟에 걸릴지는 서비스 유닛 파일의 `[Install]` 섹션 `WantedBy=` 가 정한다
+- `disable` 은 그 링크를 지운다 → **서비스 파일 자체는 그대로**
+
+#### SysV 와 비교하면 구조가 같다
+
+| SysV | systemd |
+| --- | --- |
+| `/etc/rc.d/rc3.d/S85httpd` → 스크립트 | `multi-user.target.wants/httpd.service` → 유닛 |
+| `chkconfig httpd on` | `systemctl enable httpd` |
+| 숫자로 **순서 강제** | 의존성으로 **필요한 것만 먼저**, 나머지는 병렬 |
+
+---
+
+### 4. 타겟이 런레벨보다 나은 점
+
+| 구분 | 런레벨 | 타겟 |
+| --- | --- | --- |
+| 식별 | 숫자 (의미 불명확) | **이름** (`graphical`·`network-online`) |
+| 동시 활성 | 하나만 | **여러 개 동시에** |
+| 실행 | 순차 | **의존성 기반 병렬** |
+| 용도 | 부팅 모드만 | 부팅 모드 + **중간 동기화 지점** |
+| 확장 | 0~6 고정 | 새 타겟을 **자유롭게 정의** |
+
+**가장 큰 차이는 마지막 두 줄이다.** 런레벨은 "부팅 모드" 하나뿐이었지만, 타겟은 **부팅 과정의 이정표**로도 쓰인다.
+
+[[#J-1. `systemd-analyze critical-chain` 출력 해석]] 의 사슬에 나왔던 것들이 그런 타겟이다.
+
+| 타겟 | 뜻 | 런레벨 대응 |
+| --- | --- | --- |
+| `sysinit.target` | 시스템 초기화 완료 | 없음 |
+| `basic.target` | 기본 시스템 준비 | 없음 |
+| `network-pre.target` | 네트워크 설정 **직전** | 없음 |
+| `network-online.target` | 네트워크 사용 가능 | 없음 |
+| `local-fs.target` | 로컬 파일시스템 마운트 완료 | 없음 |
+| `multi-user.target` | 다중 사용자 CLI | **3** |
+| `graphical.target` | GUI | **5** |
+
+- 이런 중간 타겟 덕분에 "방화벽은 네트워크보다 먼저" 같은 순서를 **선언적으로** 표현할 수 있다
+- 런레벨 방식에서는 `S` 번호를 손으로 조정해야 했다
+
+---
+
+### 5. 런레벨 호환성
+
+systemd 는 옛 명령과 개념을 **호환용으로** 유지한다.
+
+```bash
+ls -l /usr/lib/systemd/system/runlevel*.target
+runlevel
+who -r
+init 3
+```
+
+```text
+runlevel0.target -> poweroff.target
+runlevel1.target -> rescue.target
+runlevel2.target -> multi-user.target
+runlevel3.target -> multi-user.target
+runlevel4.target -> multi-user.target
+runlevel5.target -> graphical.target
+runlevel6.target -> reboot.target
+```
+
+- **2·3·4 가 모두 `multi-user.target` 을 가리킨다** → systemd 에서는 셋이 사실상 같음
+- `runlevel` 명령은 `이전 현재` 를 출력. 이전 값이 없으면 `N`(**N**one)
+- `who -r` : utmp 의 런레벨 레코드 ([[#F-4. `pstree` 출력 — 최소 설치 Rocky 9 의 프로세스 전수 해설]] 의 `systemd-update-utmp` 가 기록한 것)
+- `init 3` · `telinit 3` 도 동작하지만 내부적으로 `systemctl isolate` 로 변환됨
+
+---
+
+### 6. 조회·전환 명령
+
+```bash
+systemctl get-default                        # 기본 타겟
+systemctl set-default multi-user.target      # 기본 타겟 변경
+systemctl list-units --type=target           # 활성 타겟
+systemctl list-dependencies multi-user.target
+systemctl isolate rescue.target              # ⚠️ 전환
+systemctl rescue                             # 위와 동일한 축약
+```
+
+#### `start` 와 `isolate` 의 차이 — 중요
+
+| 명령 | 동작 |
+| --- | --- |
+| `systemctl start X.target` | X 를 **추가로** 활성화. 기존 것은 그대로 |
+| `systemctl isolate X.target` | X 와 그 의존성만 남기고 **나머지는 모두 중지** |
+
+**`isolate` 가 런레벨 전환(`init N`)에 해당한다.** 이름 그대로 "고립시킨다" 는 뜻이다.
+
+⚠️ `systemctl isolate rescue.target` 을 SSH 세션에서 실행하면 **네트워크 서비스가 중지되어 접속이 끊긴다.** 반드시 콘솔에서 수행 ([[LAB/07-boot-systemd-log]] 3절).
+
+#### `default.target` 의 실체
+
+```bash
+ls -l /etc/systemd/system/default.target
+```
+
+```text
+default.target -> /usr/lib/systemd/system/multi-user.target
+```
+
+- `default.target` 은 **심볼릭 링크**다. `set-default` 는 이 링크를 바꾸는 것
+- GUI 설치 시스템에서 텍스트 모드로 부팅하고 싶다면 이 링크를 `multi-user.target` 으로 바꾼다
+
+---
+
+### 7. 복구용 타겟 3종 비교
+
+| 타겟 | 마운트 | 네트워크 | 서비스 | 용도 |
+| --- | --- | --- | --- | --- |
+| `multi-user.target` | 전부 | ✓ | 전부 | 정상 운영 |
+| `rescue.target` | 로컬 파일시스템 | ✗ | 최소 | 시스템 복구 |
+| `emergency.target` | **루트만, 읽기 전용** | ✗ | 없음 | 최후 수단 |
+
+- `rescue` 는 로컬 디스크가 마운트되므로 파일 수정이 가능
+- `emergency` 는 `/etc/fstab` 오류처럼 **마운트 자체가 실패했을 때** 진입 → `mount -o remount,rw /` 부터 해야 함 ([[LAB/07-boot-systemd-log]] 9절의 fstab 복구 실습)
+
+부팅 시 진입하려면 GRUB 편집으로 커널 파라미터를 준다.
+
+```text
+systemd.unit=rescue.target
+systemd.unit=emergency.target
+```
+
+> 📝 **시험 포인트** : 런레벨↔타겟 표(**1=rescue, 3=multi-user, 5=graphical, 6=reboot**)가 매 회차 출제. 현재 런레벨 확인은 `runlevel`·`who -r`, 기본 타겟 확인은 `systemctl get-default`. `start` 와 `isolate` 의 차이. **타겟은 실행 파일이 없는 동기화 지점**. `systemctl enable` 은 `.wants` 디렉터리에 **심볼릭 링크를 만드는 것**. `/etc/inittab` 은 RHEL 7 이후 미사용
+
+관련 항목: [[#J-1. `systemd-analyze critical-chain` 출력 해석]] · [[#G-1. `~d` 데몬과 `~ctl` 명령의 관계]] · 절차서 [[LAB/01-vm-setup-and-inspection]] 4-3, [[LAB/07-boot-systemd-log]] 3절
 
 ---
 
