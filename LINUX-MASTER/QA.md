@@ -50,6 +50,7 @@ updated: 2026-09-04
 - [[#F-1. 환경변수·셸·tty 와 `su -` 가 환경을 초기화하는 이유]]
 - [[#F-2. 로그인 셸과 비로그인 셸의 차이]]
 - [[#F-3. `su`·`sudo -i` 를 반복하면 셸이 스택처럼 쌓이는가]]
+- [[#F-4. `pstree` 출력 — 최소 설치 Rocky 9 의 프로세스 전수 해설]]
 
 ---
 
@@ -1839,6 +1840,155 @@ sudo grep -E 'sudo|su\[' /var/log/secure | tail
 > 📝 **시험 포인트** : `exit` 는 현재 셸 종료, `logout` 은 **로그인 셸 전용**, `Ctrl+D` 는 EOF 로 `exit` 과 동일. `exec` 는 현재 프로세스를 **대체**하므로 복귀 불가. 자식 셸의 환경 변경은 부모에 반영되지 않음. `$$`·`$PPID`·`SHLVL` 의 의미
 
 관련 항목: [[#F-1. 환경변수·셸·tty 와 `su -` 가 환경을 초기화하는 이유]] · [[#C-1. wheel 그룹이란 무엇이며 sudo 와 어떤 관계인가]] · 절차서 [[LAB/01-vm-setup-and-inspection]] 2-4, [[LAB/06-process-scheduling-diagnosis]] 1절
+
+---
+
+## F-4. `pstree` 출력 — 최소 설치 Rocky 9 의 프로세스 전수 해설
+
+**Q.** `pstree` 출력에 나온 각 프로세스는 무엇인가.
+
+**A.** 최소 설치 상태의 Rocky 9 에서 도는 것들이다. **systemd 가 뿌리이고 나머지는 전부 그 자손**이다.
+
+### 먼저 읽는 법
+
+| 표기 | 뜻 |
+| --- | --- |
+| `이름(숫자)` | 프로세스와 그 **PID** |
+| `─┬─` `└─` | 부모-자식 관계 |
+| `{이름}(숫자)` | **프로세스가 아니라 스레드**(thread). 중괄호가 표시 |
+| `pstree(23+` | 화면 폭에 잘림. `-l` 옵션으로 전체 표시 |
+
+- **스레드** : 한 프로세스 안에서 메모리를 공유하며 동시에 도는 실행 흐름. `NetworkManager(744)` 아래 `{NetworkManager}(746)(747)` 은 **별개 프로그램이 아니라 같은 프로그램의 작업 스레드**
+- **PID 가 작을수록 먼저 시작** → `systemd-journal(570)` · `systemd-udevd(583)` 이 가장 이르고, `sshd-session(2303)` 처럼 큰 번호는 나중에 접속하며 생긴 것
+
+### 1. 뿌리 — `systemd(1)`
+
+- **PID 1**. 커널이 부팅 마지막에 직접 실행하는 **최초의 사용자 공간 프로세스**
+- 나머지 모든 프로세스의 **조상**. 서비스를 순서·의존성에 맞춰 띄우고 감시
+- 부모를 잃은 고아 프로세스를 **입양**해 정리하는 역할도 함
+- 과거 SysV `init` 을 대체 ([[LAB/07-boot-systemd-log]])
+
+### 2. 시스템 기반 서비스
+
+| 프로세스 | 정체 | 역할 |
+| --- | --- | --- |
+| `systemd-journal(570)` | **journald** | 모든 로그를 바이너리로 수집·보관. `journalctl` 이 읽는 대상 |
+| `systemd-udevd(583)` | **udev** **d**aemon | 장치 감지·장치 파일(`/dev/*`) 생성·이름 규칙 적용. `enp0s1` 이름이 붙는 것도 이 단계 |
+| `systemd-logind(702)` | **login** **d**aemon | 로그인 세션·좌석(seat) 관리, 전원 키 처리 |
+| `dbus-broker-lau(692)` → `dbus-broker(693)` | **D-Bus** 메시지 버스 | 프로세스 간 통신 창구. `lau` 는 launcher(실행기)가 이름 길이로 잘린 것 |
+| `auditd(666)` | **audit** **d**aemon | 커널 감사 기록을 `/var/log/audit/audit.log` 로 저장. SELinux 거부 추적에 사용 ([[LAB/10-security-firewall-selinux]] 5절) |
+| `rsyslogd(796)` | **r**ocket-fast **sys**tem **log** | 전통 텍스트 로그(`/var/log/messages`·`secure`) 작성. journald 와 병행 |
+| `irqbalance(697)` | **IRQ** balance | **I**nterrupt **R**e**Q**uest(하드웨어 인터럽트)를 여러 CPU 코어에 분산해 한 코어 쏠림 방지 |
+
+- **journald 와 rsyslog 가 둘 다 도는 이유** : journald 는 구조화된 바이너리 로그, rsyslog 는 사람이 읽고 원격 전송하기 쉬운 텍스트 로그. 시험은 양쪽 다 출제
+
+### 3. 네트워크·시간·방화벽
+
+| 프로세스 | 정체 | 역할 |
+| --- | --- | --- |
+| `NetworkManager(744)` | 네트워크 관리자 | 인터페이스·IP·DNS·경로 설정. `nmcli` 가 이 데몬에 지시 ([[#D-3. `ip addr` 출력 전체 해설]]) |
+| `chronyd(700)` | **chrony** **d**aemon | NTP 시간 동기화. 과거 `ntpd` 를 대체 |
+| `firewalld(696)` | 방화벽 관리자 | nftables 규칙을 존(zone) 단위로 관리. `firewall-cmd` 가 지시 |
+
+### 4. 작업 예약
+
+| 프로세스 | 역할 |
+| --- | --- |
+| `crond(779)` | **cron** **d**aemon — 정해진 시각에 작업 실행. `/etc/crontab`·`/etc/cron.d/`·사용자 crontab 감시 ([[LAB/06-process-scheduling-diagnosis]] 7절) |
+
+- `atd` 는 목록에 없음 → **아직 설치·활성화하지 않은 상태**. Part 06 에서 켠다
+
+### 5. 로그인 경로 두 갈래 — 여기가 핵심
+
+이 출력에는 **콘솔 로그인**과 **원격 로그인**이 동시에 잡혀 있다.
+
+#### ① 콘솔 (직렬 포트 / 디스플레이)
+
+```text
+├─agetty(780)
+├─login(1865)───bash(1888)
+```
+
+- `agetty` = **a**lternative **getty**. **getty** 는 **get** **tty** → "터미널을 잡아 로그인 프롬프트를 띄우는 프로그램"
+- 동작 순서 : `agetty` 가 tty 를 열고 대기 → 사용자가 이름 입력 → **`login` 으로 자기 자신을 대체**(`exec`) → 인증 성공 시 셸을 자식으로 실행
+- 그래서 목록에 **둘이 따로 보인다**
+  - `agetty(780)` : 아직 아무도 로그인하지 않은 tty 에서 **대기 중**
+  - `login(1865)→bash(1888)` : 다른 tty 에서 **로그인이 끝난 세션**
+- 직렬 포트를 붙이고 `console=ttyAMA0` 을 지정했으므로([[#A-3. `Display output is not active.` 가 뜨는 이유]]) `serial-getty@ttyAMA0` 와 디스플레이 쪽 getty 가 함께 뜬 상태
+- `agetty` 가 `exec` 로 자신을 대체하는 것이 [[#F-3. `su`·`sudo -i` 를 반복하면 셸이 스택처럼 쌓이는가]] 에서 설명한 `exec` 의 실제 사용 예
+
+#### ② 원격 (SSH) — 지금 이 세션
+
+```text
+└─sshd(774)───sshd-session(2303)───sshd-session(2308)───bash(2309)───su(2355)───bash(2359)───pstree
+```
+
+| 단계 | 프로세스 | 역할 |
+| --- | --- | --- |
+| 1 | `sshd(774)` | 22번 포트에서 **접속을 기다리는 부모 데몬**. 부팅 시 시작 |
+| 2 | `sshd-session(2303)` | 접속 하나마다 생기는 **권한 분리용 자식**. 인증 전이라 낮은 권한 |
+| 3 | `sshd-session(2308)` | 인증 성공 후 **그 사용자 권한으로** 전환된 세션 |
+| 4 | `bash(2309)` | 로그인 셸 |
+| 5 | `su(2355)` | `su` 실행 |
+| 6 | `bash(2359)` | `su` 가 띄운 새 셸 — **현재 여기** |
+| 7 | `pstree` | 방금 실행한 명령 |
+
+- **권한 분리**(privilege separation) : 인증 전 코드를 낮은 권한 프로세스에 가둬, 취약점이 있어도 root 권한을 얻지 못하게 하는 설계. OpenSSH 의 오랜 보안 관행 (프로세스 이름은 버전에 따라 `sshd` 로만 표시되기도 함)
+- **4→5→6 이 `su` 중첩의 실물** — `exit` 하면 6 이 죽고 4 로 돌아간다
+
+### 6. 사용자별 systemd 인스턴스
+
+```text
+├─systemd(1881)───(sd-pam)(1883)
+```
+
+- 사용자가 로그인하면 **그 사용자 전용 systemd 인스턴스**가 뜬다 (`systemd --user`)
+- 사용자 단위 서비스·타이머를 관리하는 용도
+- `(sd-pam)` : **s**ystem**d**-**PAM** 연동 보조 프로세스. 괄호는 **커널이 인식하는 이름과 실행 파일 이름이 다름**을 뜻함
+- PID 1881 이 `login(1865)` 과 가까운 번호 → **콘솔 로그인 시점에 함께 생성**된 것
+
+### 7. 지금 없는 것들
+
+최소 설치라 아직 없다. 각 파트에서 설치하며 이 목록이 늘어난다.
+
+| 없는 프로세스 | 추가되는 시점 |
+| --- | --- |
+| `httpd` · `named` · `smbd` · `nmbd` · `vsftpd` · `master`(postfix) | [[LAB/09-network-services]] |
+| `dockerd` · `containerd` · `libvirtd` | [[LAB/11-container-virtualization]] |
+| `atd` · `sysstat` 계열 | [[LAB/06-process-scheduling-diagnosis]] |
+
+### 유용한 옵션
+
+```bash
+pstree -p            # PID 표시
+pstree -u            # 사용자가 바뀌는 지점에 사용자명 표시
+pstree -a            # 명령행 인자까지
+pstree -l            # 긴 줄을 자르지 않음
+pstree -s <PID>      # 그 프로세스의 조상 계보만
+pstree -T            # 스레드 숨김 (중괄호 항목 제거)
+pstree admin1        # 특정 사용자의 프로세스만
+```
+
+- `-p` : **p**ID. 어느 것이 부모인지 정확히 볼 때 필수
+- `-u` : **u**ser — 권한이 바뀌는 경계를 확인. `su`·`sudo` 추적에 유용
+- `-a` : **a**rguments — 같은 이름의 프로세스가 여럿일 때 무엇을 실행 중인지 구분
+- `-s` : **s**how parents — "이 프로세스가 왜 떠 있는가" 를 거슬러 올라가 확인
+- `-T` : 스레드를 빼고 프로세스만 → 목록이 훨씬 간결해짐
+
+### 대응 명령
+
+```bash
+ps -ef --forest              # 같은 계층을 ps 로
+ps -eo pid,ppid,user,tty,stat,cmd --forest
+systemctl list-units --type=service --state=running
+systemd-cgls                 # cgroup(서비스 단위) 기준 트리
+```
+
+- `systemd-cgls` : systemd 의 **c**ontrol **g**roup **l**i**s**t → 서비스 단위로 묶어 보여주므로 "어느 유닛이 어느 프로세스를 갖고 있는가" 파악에 유리
+
+> 📝 **시험 포인트** : **PID 1 은 systemd**(과거 `init`). `getty`/`agetty` 는 터미널에 로그인 프롬프트를 띄우는 프로그램. `journald`(바이너리) 와 `rsyslogd`(텍스트)의 역할 구분. 고아 프로세스는 **PID 1 이 입양**. `pstree` 의 중괄호는 스레드
+
+관련 항목: [[#F-1. 환경변수·셸·tty 와 `su -` 가 환경을 초기화하는 이유]] · [[#F-3. `su`·`sudo -i` 를 반복하면 셸이 스택처럼 쌓이는가]] · 절차서 [[LAB/06-process-scheduling-diagnosis]] 1절, [[LAB/07-boot-systemd-log]] 3절
 
 ---
 
