@@ -40,6 +40,7 @@ updated: 2026-09-04
 ### D. 네트워크
 - [[#D-1. DHCP 란 무엇인가]]
 - [[#D-2. `dhcpd_leases` 에 응답 없는 IP 가 보이는 이유]]
+- [[#D-3. `ip addr` 출력 전체 해설]]
 
 ---
 
@@ -860,6 +861,172 @@ arp -n 192.168.64.3                   # ARP 캐시에 MAC 이 잡히는지
 > 📝 **시험 포인트** : DHCP 서버의 임대 기록 파일 경로는 `/var/lib/dhcpd/dhcpd.leases`(RHEL). 임대 목록에 있다고 해서 **현재 접속 중이라는 뜻은 아님** — 만료 시각을 함께 봐야 함
 
 관련 항목: [[#D-1. DHCP 란 무엇인가]] · [[#A-5. 실습은 SSH 로 하는가 UTM 콘솔로 하는가]]
+
+---
+
+## D-3. `ip addr` 출력 전체 해설
+
+**Q.** 아래 출력의 각 항목이 무엇을 뜻하는가.
+
+```text
+2: enp0s1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
+    inet 192.168.64.3/24 brd 192.168.64.255 scope global dynamic noprefixroute enp0s1
+       valid_lft 2785sec preferred_lft 2785sec
+```
+
+**A.** 세 줄이 각각 **장치 계층 → 주소 → 주소의 수명**을 나타낸다.
+
+- `ip` : iproute2 패키지의 통합 네트워크 도구. 구형 `ifconfig`(net-tools)를 대체
+- `ip addr` = `ip address show` 축약. 더 줄여 `ip a` 로도 사용
+
+### 1행 — 장치(링크) 계층
+
+| 항목 | 뜻 |
+| --- | --- |
+| `2:` | **인터페이스 인덱스**(ifindex). 커널이 부여하는 일련번호. `1` 은 항상 루프백 `lo` 이므로 첫 물리 인터페이스는 보통 `2` |
+| `enp0s1` | 인터페이스 이름 |
+| `<...>` | 플래그 목록 |
+| `mtu 1500` | 한 번에 보낼 수 있는 최대 데이터 크기 |
+| `qdisc fq_codel` | 송신 대기열 처리 방식 |
+| `state UP` | 실제 동작 상태 |
+| `group default` | 인터페이스 그룹 |
+| `qlen 1000` | 송신 대기열 길이 |
+
+#### 인터페이스 이름 `enp0s1` 의 규칙
+
+RHEL 7 부터 **예측 가능한 네트워크 인터페이스 이름**(Predictable Network Interface Names) 규칙을 사용한다.
+
+| 부분 | 뜻 |
+| --- | --- |
+| `en` | **en**thernet (유선). 무선은 `wl`(**w**ire**l**ess), WWAN 은 `ww` |
+| `p0` | **p**CI 버스 번호 0 |
+| `s1` | **s**lot 번호 1 |
+
+- 구형 `eth0` 방식은 **인식 순서에 따라 번호가 바뀌어** NIC 을 추가하면 `eth0` 과 `eth1` 이 뒤바뀌는 문제가 있었음
+- 새 방식은 물리적 위치에 기반하므로 **재부팅해도 이름이 고정**
+- `eth0` 방식으로 되돌리려면 커널 파라미터에 `net.ifnames=0 biosdevname=0` 추가
+
+#### 플래그 4종
+
+| 플래그 | 뜻 |
+| --- | --- |
+| `BROADCAST` | 브로드캐스트 전송을 지원하는 장치 |
+| `MULTICAST` | 멀티캐스트 전송을 지원하는 장치 |
+| `UP` | **관리자가 켠 상태** (`ip link set enp0s1 up` 으로 설정) |
+| `LOWER_UP` | **물리 계층 연결이 살아 있음** (캐리어 감지) |
+
+- `UP` 과 `LOWER_UP` 의 구분이 핵심 — `UP` 은 "켜라고 지시했다", `LOWER_UP` 은 "실제로 선이 연결돼 있다"
+- 랜선을 뽑으면 `UP` 은 남고 `LOWER_UP` 이 사라지며 `NO-CARRIER` 가 표시됨 → **장애 진단의 1차 지표**
+- 루프백에는 `LOOPBACK` 플래그가 붙음
+
+#### `mtu 1500`
+
+- **MTU** = **M**aximum **T**ransmission **U**nit → 한 프레임에 실을 수 있는 **페이로드 최대 바이트**
+- 1500 은 이더넷 표준값. 이보다 큰 데이터는 **단편화**(fragmentation)되어 나뉘어 전송
+- VPN·터널을 쓰면 헤더가 추가돼 1500 을 넘길 수 없어 1400 대로 낮추기도 함
+- 9000(점보 프레임)은 스토리지 전용망 등에서 사용
+- 변경 : `ip link set enp0s1 mtu 1400` (임시) / `nmcli con mod enp0s1 802-3-ethernet.mtu 1400` (영구)
+
+#### `qdisc fq_codel`
+
+- **qdisc** = **q**ueueing **disc**ipline → 패킷을 어떤 순서·속도로 내보낼지 정하는 정책
+- **fq_codel** = **F**air **Q**ueuing **Co**ntrolled **Del**ay → 흐름별로 공평하게 나누고 큐가 길어지면 미리 버려 지연을 억제
+  - 한 대용량 다운로드가 대역폭을 독점해 다른 통신이 느려지는 **버퍼블로트**(bufferbloat) 완화가 목적
+- 대안 : `pfifo_fast`(단순 선입선출), `noqueue`(루프백·브리지)
+
+#### `state UP` 과 `qlen`
+
+- `state` : 실제 운용 상태. `UP` · `DOWN` · `UNKNOWN`(루프백 등)
+- `qlen 1000` = **q**ueue **len**gth → 커널이 드라이버로 넘기기 전 대기시킬 패킷 수. `txqueuelen` 과 같은 값
+- `group default` : 인터페이스를 묶어 한 번에 제어하기 위한 그룹. 대부분 `default`
+
+### 2행 — 주소(IP) 계층
+
+| 항목 | 뜻 |
+| --- | --- |
+| `inet` | 주소 계열이 **IPv4**. IPv6 는 `inet6` |
+| `192.168.64.3/24` | 주소와 **프리픽스 길이**(CIDR 표기) |
+| `brd 192.168.64.255` | 브로드캐스트 주소 |
+| `scope global` | 주소의 유효 범위 |
+| `dynamic` | 자동 할당(DHCP)으로 받은 주소 |
+| `noprefixroute` | 이 주소에 대한 경로를 커널이 자동 생성하지 않음 |
+| 끝의 `enp0s1` | 주소 **라벨** |
+
+#### `/24` 와 브로드캐스트
+
+- **CIDR** = **C**lassless **I**nter-**D**omain **R**outing → 앞에서부터 몇 비트가 네트워크 부분인지 표기
+- `/24` = 상위 24비트가 네트워크 → 서브넷 마스크 `255.255.255.0` 과 동일
+- 네트워크 주소 `192.168.64.0`, 브로드캐스트 `192.168.64.255`, 호스트 사용 가능 범위 `.1` ~ `.254` (총 254개)
+- `brd` = **br**oa**d**cast → 해당 네트워크 전체에 보내는 주소. 커널이 프리픽스로부터 자동 계산
+
+#### `scope` 의 값
+
+| 값 | 뜻 |
+| --- | --- |
+| `global` | 어디서나 유효. 외부와 통신 가능한 일반 주소 |
+| `link` | 같은 네트워크 안에서만 유효 (예: `169.254.x.x`) |
+| `host` | 자기 자신 안에서만 유효 (예: `127.0.0.1`) |
+
+#### `dynamic` 과 `noprefixroute`
+
+- `dynamic` : **수명이 정해진 주소**라는 커널 표시. DHCP 또는 IPv6 자동설정으로 받은 경우 붙음
+  - 고정 IP 로 바꾸면 이 표시가 사라짐 → **DHCP 인지 고정인지 한눈에 구분하는 지표**
+- `noprefixroute` : 보통 주소를 붙이면 커널이 `192.168.64.0/24` 경로를 자동으로 만드는데, 이를 **하지 말라**는 뜻
+  - NetworkManager 가 경로를 직접 관리하기 위해 붙임. 경로 우선순위(metric)를 세밀히 제어하려는 목적
+  - 경로는 `ip route` 로 별도 확인
+
+### 3행 — 주소의 수명
+
+```text
+valid_lft 2785sec preferred_lft 2785sec
+```
+
+- `valid_lft` = **valid lifetime** → 이 주소가 **유효한** 남은 시간
+- `preferred_lft` = **preferred lifetime** → 이 주소를 **새 연결에 우선 사용할** 남은 시간
+- `preferred` 가 먼저 끝나면 주소는 **deprecated** 상태 — 기존 연결은 유지하되 새 연결에는 쓰지 않음 (주로 IPv6 주소 교체 시 사용)
+- 고정 IP 는 수명이 없으므로 두 값이 `forever` 로 표시
+
+#### DHCP 임대와의 관계
+
+`2785sec` 은 약 46분이다. macOS 기본 임대가 1시간(3600초)이므로 **약 14분 전에 임대를 받았다**는 뜻이다. 이 값은 초 단위로 계속 줄어들며, 절반쯤 남았을 때 클라이언트가 자동 갱신을 시도해 다시 채워진다 ([[#D-1. DHCP 란 무엇인가]] 의 T1 시점).
+
+```bash
+watch -n5 'ip -4 addr show enp0s1 | grep valid_lft'
+```
+
+- `watch` : 명령을 주기적으로 반복 실행해 변화를 관찰
+- `-n5` : **n**umber of seconds — 5초 간격
+- 값이 줄다가 갑자기 늘어나는 순간이 **갱신 성공 시점**
+
+### 관련 조회 명령
+
+```bash
+ip -br addr              # 한 줄 요약 (brief)
+ip -4 addr               # IPv4 만
+ip -s link show enp0s1   # 송수신 통계·에러·드롭
+ip route                 # 라우팅 테이블
+ifconfig enp0s1          # 구형 도구 (net-tools 설치 필요)
+```
+
+- `-br` : **br**ief — 인터페이스마다 한 줄로 요약. 다수 인터페이스를 훑을 때 유용
+- `-4` / `-6` : 주소 계열 한정
+- `-s` : **s**tatistics — 패킷 수, 오류(errors), 버려진 패킷(dropped) 표시. **NIC 장애 진단의 핵심**
+
+### 구형 명령 대응
+
+| 신형 (iproute2) | 구형 (net-tools) |
+| --- | --- |
+| `ip addr` | `ifconfig` |
+| `ip link set eth0 up` | `ifconfig eth0 up` |
+| `ip route` | `route -n` |
+| `ip neigh` | `arp -n` |
+| `ss` | `netstat` |
+
+RHEL 9 는 `net-tools` 가 기본 미설치 → 구형 명령을 쓰려면 `dnf install net-tools` 필요. **시험은 양쪽 다 출제**되므로 대응 관계를 외워야 한다.
+
+> 📝 **시험 포인트** : `UP` 과 `LOWER_UP` 의 차이(설정 vs 물리 연결), `NO-CARRIER` 의 의미, MTU 기본값 1500, `scope` 3종, `dynamic` 표시로 DHCP 여부 판별, `en p0 s1` 명명 규칙, `ip` ↔ `ifconfig` 대응
+
+관련 항목: [[#D-1. DHCP 란 무엇인가]] · 절차서 [[LAB/08-network-config]] 1절
 
 ---
 
