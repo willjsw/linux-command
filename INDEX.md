@@ -4,7 +4,7 @@ type: MOC
 tags:
   - moc/index
   - linux/reference
-updated: 2026-08-01
+updated: 2026-09-06
 ---
 
 # Linux Command Vault
@@ -77,6 +77,7 @@ updated: 2026-08-01
 - [[which]] — 명령 설치 여부·실제 경로 확인 (`type` / `command -v` 포함)
 - [[env]] — 환경변수·셸 옵션 관리 (`export` / `source` / `set -euo pipefail`)
 - [[ldd]] — 동적 링크 의존성 열거 (`not found` = 실행 실패 원인) ※ 참조용
+- [[fhs]] — 루트 디렉터리 구조 표준 (용도·예시·용량 실측) ※ 참조용
 
 ### PROCESS-MANAGEMENT (프로세스)
 - [[ps]] — 프로세스 스냅샷 조회 (대괄호 트릭으로 grep 자기제외)
@@ -165,10 +166,11 @@ updated: 2026-08-01
 6. [[journalctl]] — 서비스 로그 상세
 
 ### 디스크 용량 부족 대응
-1. [[df]] `-h` — 부족 파티션 식별
+1. [[df]] `-hT` — 부족 파티션 식별
 2. [[lvm]] `vgs` — 볼륨그룹 여유 공간 확인
 3. [[du]] `-sh` → [[sort]] `-h` — 원인 디렉터리 추적
-4. [[lvm]] `vgs` → `lvextend` → `xfs_growfs` — 온라인 확장
+4. [[fhs]] — 해당 디렉터리의 성격 판단 (삭제 가능 `/var/cache` vs 보존 대상 `/var/lib`)
+5. [[lvm]] `vgs` → `lvextend` → `xfs_growfs` — 온라인 확장
 
 ### 애플리케이션 기동·검증·종료 (개발 루프)
 1. [[lsof]] `-ti:8080` — 포트 선점 여부 확인
