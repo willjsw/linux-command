@@ -74,6 +74,7 @@ updated: 2026-09-06
 
 ### SYSTEM-INFO (시스템 정보)
 - [[localectl]] — 로케일·키맵·시간대 설정
+- [[man]] — 매뉴얼 조회·역탐색 (`섹션 번호표` / `whatis` / `apropos` / `mandb` / `whereis`)
 - [[which]] — 명령 설치 여부·실제 경로 확인 (`type` / `command -v` 포함)
 - [[env]] — 환경변수·셸 옵션 관리 (`export` / `source` / `set -euo pipefail`)
 - [[ldd]] — 동적 링크 의존성 열거 (`not found` = 실행 실패 원인) ※ 참조용
@@ -202,6 +203,14 @@ updated: 2026-09-06
 2. [[iconv]] `-f EUC-KR -t UTF-8` — UTF-8 변환
 3. [[tr]] `-d '\000'` — NUL·제어문자 제거
 4. [[grep]] / [[sed]] — 변환 결과 검색·범위 추출
+
+### 미지 명령·옵션 조사
+1. [[which]] `type` — 존재·내장 여부 판정 (부재 시 [[dnf]] `provides` 로 패키지 역탐색)
+2. [[man]] `whatis` — 한 줄 정체·보유 섹션 확인
+3. [[man]] `<섹션> <명령>` — 상세 문법 (매뉴얼 부재 시 `--help` / 내장은 `help`)
+4. [[man]] `-k` / `-K` — 이름을 모를 때 기능·본문 역탐색 (`nothing appropriate.` → `mandb` 선행)
+5. [[rpm]] `-qf $(which <명령>)` — 소속 패키지 확정
+6. [[man]] `-w` / [[find]] — 매뉴얼·설정 파일 실제 위치 확보
 
 ### 의존성 라이브러리 내부 확인
 1. [[find]] — 로컬 저장소(`~/.m2`) JAR 탐색
