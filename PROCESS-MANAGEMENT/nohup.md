@@ -8,7 +8,7 @@ tags:
   - task/configure
   - topic/troubleshooting
   - privilege/user
-related: ["[[pkill]]", "[[pgrep]]", "[[tail]]", "[[timeout]]", "[[ps]]"]
+related: ["[[pkill]]", "[[pgrep]]", "[[tail]]", "[[timeout]]", "[[ps]]", "[[kill]]"]
 distro: 전체
 verified: macOS (Darwin 25.5) / Rocky Linux 9.6
 updated: 2026-07-30
@@ -63,3 +63,4 @@ pkill -f "bootRun" 2>/dev/null                                       # 종료
 - [[tail]] : 기동 로그 확인 — 성공·실패 판정
 - [[timeout]] : 실행 시간 상한 필요 시 병용 — 자동화 무한대기 방지
 - [[ps]] : 기동 프로세스 상세 확인
+- [[kill]] : `SIGHUP`(1번) 등 시그널 체계 전반 — 시그널 표·기본 동작 참조

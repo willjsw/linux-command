@@ -10,7 +10,7 @@ tags:
   - topic/boot-target
   - topic/desktop-environment
   - privilege/mixed
-related: ["[[journalctl]]", "[[ss]]", "[[ssh]]", "[[dnf-group]]", "[[reboot]]", "[[nmcli]]", "[[hostnamectl]]", "[[dnf]]", "[[firewall-cmd]]", "[[localectl]]", "[[crontab]]", "[[iptables]]"]
+related: ["[[journalctl]]", "[[ss]]", "[[ssh]]", "[[dnf-group]]", "[[reboot]]", "[[nmcli]]", "[[hostnamectl]]", "[[dnf]]", "[[firewall-cmd]]", "[[localectl]]", "[[crontab]]", "[[iptables]]", "[[kill]]"]
 distro: systemd 사용 배포판
 verified: Rocky Linux 9.6
 updated: 2026-07-29
@@ -119,3 +119,4 @@ reboot
 - [[localectl]] : systemd 계열 로케일 설정
 - [[crontab]] : systemd 타이머(`list-timers`) 지속성 조사
 - [[iptables]] : `iptables` 서비스로 규칙 영구화·활성화
+- [[kill]] : 서비스 정지에 쓰이는 시그널 체계 (`SIGTERM` → `SIGKILL`) 표 참조
