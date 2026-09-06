@@ -9,7 +9,7 @@ tags:
   - topic/troubleshooting
   - topic/security
   - privilege/user
-related: ["[[which]]", "[[sshpass]]", "[[curl]]", "[[localectl]]", "[[test]]", "[[ldd]]"]
+related: ["[[which]]", "[[sshpass]]", "[[curl]]", "[[localectl]]", "[[test]]", "[[ldd]]", "[[man]]"]
 distro: 전체
 verified: macOS (Darwin 25.5) / Rocky Linux 9.6
 updated: 2026-07-30
@@ -140,3 +140,4 @@ set -x                    # 실행 명령 추적 출력 (디버깅)
 - [[localectl]] : 시스템 로케일 설정 — `env LC_ALL` 은 명령 단위 재정의
 - [[test]] : 스크립트 조건 분기 — `set -u` 와 병용
 - [[ldd]] : `LD_LIBRARY_PATH` 가 의존성 탐색 경로 결정
+- [[man]] : `MANPATH` `MANPAGER` `MANWIDTH` 로 매뉴얼 검색 경로·페이저·출력 폭 제어
