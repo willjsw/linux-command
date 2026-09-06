@@ -8,7 +8,7 @@ tags:
   - task/verify
   - topic/troubleshooting
   - privilege/user
-related: ["[[timeout]]", "[[dnf]]", "[[rpm]]", "[[file]]", "[[env]]", "[[ldd]]"]
+related: ["[[timeout]]", "[[dnf]]", "[[rpm]]", "[[file]]", "[[env]]", "[[ldd]]", "[[fhs]]"]
 distro: 전체
 verified: macOS (Darwin 25.5) / Rocky Linux 9.6
 updated: 2026-07-30
@@ -85,3 +85,4 @@ command -v python3         # 이식성 높은 존재 확인 (POSIX)
 - [[file]] : 확인된 실행 파일의 유형·아키텍처 판정
 - [[env]] : `PATH` 환경변수 확인 — `which` 탐색 범위 결정
 - [[ldd]] : `ldd $(which <명령>)` 로 확보 경로의 의존성 조회
+- [[fhs]] : usr-merge 로 `/bin`→`/usr/bin` 링크 — 실제 경로 확인 근거

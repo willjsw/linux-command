@@ -8,7 +8,7 @@ tags:
   - topic/partition
   - topic/lvm
   - privilege/user
-related: ["[[df]]", "[[fdisk]]", "[[lvm]]", "[[dd]]", "[[parted]]", "[[chroot]]", "[[mount]]", "[[du]]", "[[dmesg]]", "[[ls]]", "[[stat]]"]
+related: ["[[df]]", "[[fdisk]]", "[[lvm]]", "[[dd]]", "[[parted]]", "[[chroot]]", "[[mount]]", "[[du]]", "[[dmesg]]", "[[ls]]", "[[stat]]", "[[fhs]]"]
 distro: 전체 (util-linux 패키지)
 verified: Rocky Linux 9.6
 updated: 2026-07-30
@@ -89,3 +89,4 @@ sdc       558.9G  0 disk
 - [[dmesg]] : 디스크 인식 커널 메시지 확인
 - [[ls]] : `/dev` 하위 장치 노드 목록 확인
 - [[stat]] : 장치 노드 속성 확인
+- [[fhs]] : `/dev` 장치 파일 체계 — 블록(`b`)·문자(`c`) 장치 구분

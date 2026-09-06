@@ -8,7 +8,7 @@ tags:
   - topic/capacity
   - privilege/mixed
   - topic/filesystem
-related: ["[[df]]", "[[lsblk]]", "[[lvm]]", "[[sort]]", "[[stat]]", "[[ls]]", "[[find]]"]
+related: ["[[df]]", "[[lsblk]]", "[[lvm]]", "[[sort]]", "[[stat]]", "[[ls]]", "[[find]]", "[[fhs]]"]
 distro: 전체 (coreutils 패키지)
 verified: 미검증 (참조용)
 updated: 2026-07-30
@@ -62,3 +62,4 @@ du -ah /log | sort -rh | head -20    # 용량 상위 20개
 - [[stat]] : 단일 파일 정밀 메타데이터
 - [[ls]] : 디렉터리 내용 목록 — 누적 용량은 `du` 담당
 - [[find]] : 대용량 파일 조건 탐색
+- [[fhs]] : 디렉터리별 용량 실측 기준 — 가상 파일시스템은 집계 제외

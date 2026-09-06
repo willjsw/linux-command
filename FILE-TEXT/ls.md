@@ -8,7 +8,7 @@ tags:
   - topic/filesystem
   - task/verify
   - privilege/mixed
-related: ["[[find]]", "[[stat]]", "[[du]]", "[[file]]", "[[lsblk]]", "[[grep]]"]
+related: ["[[find]]", "[[stat]]", "[[du]]", "[[file]]", "[[lsblk]]", "[[grep]]", "[[fhs]]"]
 distro: 전체
 verified: macOS (Darwin 25.5) / Rocky Linux 9.6
 updated: 2026-08-03
@@ -71,3 +71,4 @@ ls -la /Library/LaunchDaemons/ /Library/LaunchAgents/ ~/Library/LaunchAgents/ 2>
 - [[file]] : 파일 유형·인코딩 판정
 - [[lsblk]] : 블록 디바이스 목록 — 파일시스템이 아닌 장치 대상
 - [[grep]] : 다중 디렉터리 출력 필터링 — `-iE` 로 후보 열거
+- [[fhs]] : 루트 디렉터리 배치 규약 — `ls -l /` 로 심볼릭 링크·가상 파일시스템 판별

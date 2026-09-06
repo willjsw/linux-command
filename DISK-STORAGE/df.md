@@ -8,7 +8,7 @@ tags:
   - topic/filesystem
   - topic/capacity
   - privilege/user
-related: ["[[lsblk]]", "[[lvm]]", "[[du]]", "[[mount]]"]
+related: ["[[lsblk]]", "[[lvm]]", "[[du]]", "[[mount]]", "[[fhs]]"]
 distro: 전체 (coreutils 패키지)
 verified: Rocky Linux 9.6
 updated: 2026-07-29
@@ -69,3 +69,4 @@ df -i                    # inode 사용량
 - [[lvm]] : 볼륨그룹 여유 공간 확인 및 논리볼륨 확장
 - [[du]] : 디렉터리 단위 사용량 분석
 - [[mount]] : 마운트 상태 확인
+- [[fhs]] : 어느 디렉터리가 별도 파일시스템인지 판별 (`/boot`·`/boot/efi` 분리)

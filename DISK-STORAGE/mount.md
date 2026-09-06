@@ -8,7 +8,7 @@ tags:
   - task/mount
   - task/recovery
   - privilege/root
-related: ["[[lsblk]]", "[[df]]", "[[chroot]]", "[[grub2-install]]", "[[passwd]]", "[[rescue-mode]]"]
+related: ["[[lsblk]]", "[[df]]", "[[chroot]]", "[[grub2-install]]", "[[passwd]]", "[[rescue-mode]]", "[[fhs]]"]
 distro: 전체 (util-linux 패키지)
 verified: Rocky Linux 9.6
 updated: 2026-07-29
@@ -108,3 +108,4 @@ exit                             # ⑤ 종료
 - [[grub2-install]] : 레스큐 환경에서 부트로더 복구
 - [[passwd]] : 레스큐 모드 비밀번호 재설정
 - [[rescue-mode]] : 레스큐 환경 진입 절차
+- [[fhs]] : 마운트 지점의 표준 용도 (`/mnt` 수동 · `/media` 이동식)

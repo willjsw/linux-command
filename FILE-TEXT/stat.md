@@ -8,7 +8,7 @@ tags:
   - task/verify
   - topic/filesystem
   - privilege/user
-related: ["[[ls]]", "[[file]]", "[[du]]", "[[file-ops]]", "[[awk]]", "[[join]]", "[[docker]]", "[[find]]"]
+related: ["[[ls]]", "[[file]]", "[[du]]", "[[file-ops]]", "[[awk]]", "[[join]]", "[[docker]]", "[[find]]", "[[fhs]]"]
 distro: 전체
 verified: macOS (Darwin 25.5) / Rocky Linux 9.6 (사고 대응 세션)
 updated: 2026-08-01
@@ -108,3 +108,4 @@ cut -c1-10 file.txt                       # 문자 위치 기준 절단
 - [[join]] : `cut` 으로 추출한 키 필드로 두 파일 결합
 - [[docker]] : 컨테이너 내 파일 메타데이터 조회
 - [[find]] : 변경 시각(`-newermt`) 기준 파일 탐색 — 시각 대조 상호보완
+- [[fhs]] : `/tmp` 스티키 비트(`1777`) 등 표준 디렉터리 권한 확인 대상
