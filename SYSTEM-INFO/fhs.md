@@ -61,13 +61,13 @@ drwxr-xr-x.  19 root root 4096 var
 
 ### 성격별 분류
 
-| 성격 | 디렉터리 | 판별 근거 |
-| --- | --- | --- |
-| **심볼릭 링크** | `bin` `sbin` `lib` `lib64` | `ls -l` 에서 `l` 로 시작 → 전부 `usr/` 하위를 가리킴 |
-| **가상 파일시스템** | `proc` `sys` `dev` `run` | 크기 0 또는 tmpfs·devtmpfs. 디스크 미점유 |
-| **별도 파일시스템** | `boot` `boot/efi` | `df` 출력에서 독립 항목 |
-| **빈 디렉터리 (규약상 예약)** | `afs` `media` `mnt` `opt` `srv` | 최소 설치 상태에서 내용 없음 |
-| **일반 디렉터리** | `etc` `home` `root` `tmp` `usr` `var` | 루트 파일시스템에 실제 존재 |
+| 성격                  | 디렉터리                                  | 판별 근거                                   |
+| ------------------- | ------------------------------------- | --------------------------------------- |
+| **심볼릭 링크**          | `bin` `sbin` `lib` `lib64`            | `ls -l` 에서 `l` 로 시작 → 전부 `usr/` 하위를 가리킴 |
+| **가상 파일시스템**        | `proc` `sys` `dev` `run`              | 크기 0 또는 tmpfs·devtmpfs. 디스크 미점유         |
+| **별도 파일시스템**        | `boot` `boot/efi`                     | `df` 출력에서 독립 항목                         |
+| **빈 디렉터리 (규약상 예약)** | `afs` `media` `mnt` `opt` `srv`       | 최소 설치 상태에서 내용 없음                        |
+| **일반 디렉터리**         | `etc` `home` `root` `tmp` `usr` `var` | 루트 파일시스템에 실제 존재                         |
 
 ### 용량 실측
 
@@ -107,6 +107,95 @@ tmpfs                tmpfs     358M     0  358M   0% /run/user/1000
 - `/boot` 는 LVM 밖의 일반 파티션 → 부트로더가 LVM 을 해석하지 못하는 경우 대비
 - `/boot/efi` 는 **vfat** → UEFI 펌웨어가 읽을 수 있는 유일한 형식
 - 상세 조회는 [[df]] · [[mount]] 참조
+
+## 이름의 뜻 — 어원과 용도
+
+- 대부분 **영어 단어의 앞 3~4글자 축약** → 원어를 알면 용도가 그대로 따라옴
+- 「유래」 열 표기 구분
+	- **FHS** : 표준 문서가 명시한 확장형
+	- **관용** : 표준 문서에 확장형은 없으나 널리 통용되는 해석
+	- **역작명** : 후대에 붙은 재해석(backronym) → 원래 뜻과 다름. 시험 답안으로는 부적절
+
+| 디렉터리 | 원어 | 축약 방식 | 유래 | 용도 |
+| --- | --- | --- | --- | --- |
+| `/` | **root** | — | FHS | 최상위. 모든 경로의 기점 |
+| `/bin` | **bin**aries | 앞 3글자 | FHS | 일반 사용자용 **필수 실행 파일** (`ls` `cp` `bash`) |
+| `/sbin` | **s**ystem **bin**aries | 접두 `s` + binaries | FHS | **관리자용** 실행 파일 (`ip` `fdisk` `useradd`) |
+| | *superuser binaries* | | 관용 | 실질 의미는 동일 — root 전용 명령 |
+| `/lib` | **lib**raries | 앞 3글자 | FHS | 공유 라이브러리·커널 모듈 |
+| `/lib64` | **lib**raries **64**bit | + 비트수 | 관용 | 64비트 공유 라이브러리 |
+| `/etc` | **et c**etera (라틴어 「그 밖의 것들」) | 앞 3글자 | 관용 | 초기 유닉스에서 **어디에도 속하지 않는 파일을 모으던 자리** → 설정 파일로 정착 |
+| | *Editable Text Configuration* | | **역작명** ⚠ | 뜻은 현재 용도와 맞으나 **후대에 만든 재해석** |
+| `/dev` | **dev**ices | 앞 3글자 | FHS | 장치 파일 (`/dev/null` `/dev/vda`) |
+| `/proc` | **proc**esses | 앞 4글자 | FHS | 프로세스·커널 정보 (procfs 가상 파일시스템) |
+| `/sys` | **sys**tem | 앞 3글자 | 관용 | 커널이 본 장치·드라이버 계층 (sysfs). **FHS 정식 항목 아님** — 리눅스 고유 |
+| `/boot` | **boot** | 그대로 | FHS | 부팅에 필요한 파일 — 커널·initramfs·부트로더 |
+| `/home` | **home** | 그대로 | FHS | 일반 사용자 **홈 디렉터리** |
+| `/root` | **root** | 그대로 | FHS | **root 계정의 홈** — 최상위 `/` 와 이름만 같고 별개 |
+| `/usr` | **us**e**r** | 앞 3글자 | 관용 | 초기 유닉스에서 **사용자 홈 디렉터리**였던 자리 → 현재는 설치 소프트웨어 본체 |
+| | *Unix System Resources* | | **역작명** ⚠ | 현재 용도를 잘 설명하나 **원래 뜻은 user** |
+| `/usr/local` | **local** | 그대로 | FHS | **이 시스템에만 해당하는** 설치분 — 관리자 직접 설치 영역 |
+| `/usr/share` | **share**able | 앞 5글자 | FHS | 아키텍처 무관 공유 데이터 (man·doc·locale·zoneinfo) |
+| `/usr/libexec` | **lib**rary **exec**utables | 합성 | 관용 | 사용자가 직접 호출하지 않는 **보조 실행 파일** |
+| `/usr/src` | **s**ou**rc**e | 자음 축약 | FHS | 소스 코드 (커널 헤더·디버그 소스) |
+| `/var` | **var**iable | 앞 3글자 | FHS | 운영 중 **크기가 변하는** 데이터 — 로그·캐시·스풀·DB |
+| `/var/spool` | **spool** (**S**imultaneous **P**eripheral **O**perations **O**n-**L**ine) | 그대로 | 관용 | 처리 대기 큐 — 인쇄·메일·cron |
+| `/var/lib` | **lib**rary | 앞 3글자 | FHS | 서비스의 **영속 상태 데이터** (`/var/lib/rpm` 등) |
+| `/tmp` | **t**e**mp**orary | 자음 축약 | FHS | 임시 파일. **재부팅 시 정리 대상** |
+| `/var/tmp` | **t**e**mp**orary | 자음 축약 | FHS | 임시 파일. **재부팅 후에도 유지** |
+| `/opt` | **opt**ional | 앞 3글자 | FHS | 「선택적」 추가 소프트웨어 — 서드파티 제품을 **디렉터리 통째로** 설치 |
+| `/srv` | **s**e**rv**ice | 자음 축약 | FHS | 이 시스템이 **외부에 제공하는** 서비스 데이터 (`/srv/www`) |
+| `/mnt` | **m**ou**nt** | 자음 축약 | FHS | 관리자가 **임시로 수동 마운트**하는 지점 |
+| `/media` | **media** | 그대로 | FHS | **이동식 매체** 자동 마운트 지점 (USB·CD) |
+| `/run` | **run**time | 앞 3글자 | FHS | 부팅 이후의 런타임 데이터 — PID 파일·소켓·잠금 |
+| `/afs` | **A**ndrew **F**ile **S**ystem | 두문자 | 관용 | 분산 파일시스템 마운트 지점. **현재 사실상 미사용** |
+
+### 이름이 헷갈리는 짝
+
+| 짝 | 구분 기준 |
+| --- | --- |
+| `/root` ↔ `/` | `/root` = root **계정의 홈**, `/` = 파일시스템 **최상위**. 이름만 같음 |
+| `/bin` ↔ `/sbin` | 일반 사용자용 ↔ **관리자용**(`s` = system) |
+| `/lib` ↔ `/usr/lib` | usr-merge 로 **현재는 동일** (`/lib` 는 심볼릭 링크) |
+| `/opt` ↔ `/usr/local` | 제품 단위 **통째 배치** ↔ `bin`·`lib` 구조로 **분산 배치** |
+| `/mnt` ↔ `/media` | 관리자 **수동 임시** ↔ **이동식 매체 자동** |
+| `/tmp` ↔ `/var/tmp` | 재부팅 시 **정리** ↔ 재부팅 후 **유지** |
+| `/var/lib` ↔ `/var/cache` | **보존 대상** 상태 데이터 ↔ **삭제 가능** 재생성 캐시 |
+| `/srv` ↔ `/var/www` | FHS 권장 위치 ↔ 배포판 관행 위치 (RHEL 은 `/var/www` 사용) |
+| `/proc` ↔ `/sys` | **프로세스** 중심 ↔ **장치·드라이버** 중심 |
+
+### 축약 규칙 정리
+- **앞 3~4글자** — `bin` `lib` `dev` `etc` `opt` `var` `run` `sys` `proc` `usr`
+- **자음만 남김** — `tmp`(temporary) `srv`(service) `mnt`(mount) `src`(source)
+- **접두사 부가** — `sbin` = `s`(system) + `bin`
+- **그대로** — `boot` `home` `root` `media` `local` `share`
+
+### 특이사항
+- **표준 원문 확인 수단이 최소 설치에 없음** → `man hier` 미제공 (`man-pages` 패키지 미설치)
+	- 설치 후 조회 가능 : `dnf install man-pages` → `man 7 hier`
+- 루트 디렉터리 골격은 `filesystem` 패키지가 제공 → 비어 있어도 **삭제 금지**
+
+```bash
+$ rpm -qi filesystem | grep -A4 '^Description'
+Description :
+The filesystem package is one of the basic packages that is installed
+on a Linux system. Filesystem contains the basic directory layout
+for a Linux operating system, including the correct permissions for
+the directories.
+
+$ rpm -ql filesystem | head
+/
+/afs
+/bin
+/boot
+/dev
+/etc
+...
+$ rpm -ql filesystem | wc -l
+17268                    # 디렉터리 골격 전체를 이 패키지 하나가 소유
+```
+
+- 조회 방법은 [[rpm]] `-qf` · `-ql` 참조
 
 ---
 
